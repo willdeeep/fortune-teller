@@ -1,0 +1,71 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+
+  "instructions": ["AGENTS.md"],
+
+  "mcp": {
+    "context7": {
+      "type": "local",
+      "command": ["npx", "-y", "@upstash/context7-mcp@latest"],
+      "enabled": true
+    },
+    "filesystem": {
+      "type": "local",
+      "command": [
+        "npx",
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "/Users/willhuntleyclarke/repos/fortune-teller"
+      ],
+      "enabled": true
+    },
+    "github": {
+      "type": "local",
+      "command": ["npx", "-y", "@modelcontextprotocol/server-github"],
+      "enabled": true,
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_PERSONAL_ACCESS_TOKEN}"
+      }
+    },
+    "git": {
+      "type": "local",
+      "command": [
+        "uvx",
+        "mcp-server-git",
+        "--repository",
+        "/Users/willhuntleyclarke/repos/fortune-teller"
+      ],
+      "enabled": true
+    }
+  },
+
+  "permission": {
+    "bash": {
+      "uv run *": "allow",
+      "uv sync *": "allow",
+      "uv add *": "allow",
+      "uv python *": "allow",
+      "pytest *": "allow",
+      "ruff *": "allow",
+      "mypy *": "allow",
+      "git status": "allow",
+      "git diff *": "allow",
+      "git log *": "allow",
+      "git add *": "allow",
+      "git commit *": "allow",
+      "git branch *": "allow",
+      "git checkout *": "allow",
+      "git tag *": "ask",
+      "git push *": "ask",
+      "git push --force *": "deny",
+      "gh repo create *": "ask",
+      "gh release *": "ask",
+      "rm -rf *": "ask",
+      "*": "ask"
+    },
+    "external_directory": {
+      "/Users/willhuntleyclarke/repos/fortune-teller/**": "allow",
+      "*": "ask"
+    }
+  }
+}
