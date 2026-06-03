@@ -1,0 +1,47 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+dist/
+build/
+.eggs/
+*.so
+
+# uv — keep uv.lock committed for reproducibility
+.venv/
+
+# macOS
+.DS_Store
+**/.DS_Store
+._*
+
+# Test artefacts
+.coverage
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Data — never commit scraped or generated data
+data/
+
+# Environment
+.env
+.envrc
+
+# DuckDB
+*.duckdb
+*.duckdb.wal
+
+# SQLite
+*.db
+*.sqlite
+*.sqlite3
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~

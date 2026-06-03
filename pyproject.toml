@@ -1,0 +1,112 @@
+[project]
+name = "fortune-teller"
+version = "0.0.1"
+description = "Local-first Tarot reading app — RAG over scraped definitions"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.13,<3.14"
+dependencies = [
+    "langchain>=0.3",
+    "langchain-core>=0.3",
+    "langchain-openai>=0.2",
+    "langchain-huggingface>=0.1",
+    "sentence-transformers>=3.0",
+    "pydantic>=2.7",
+    "pydantic-settings>=2.4",
+    "duckdb>=1.1",
+    "gradio>=5.0",
+    "httpx>=0.27",
+    "platformdirs>=4.2",
+]
+
+[project.optional-dependencies]
+dev = [
+    "selectolax>=0.3",
+    "beautifulsoup4>=4.12",
+    "tenacity>=9.0",
+    "rich>=13.7",
+    "typer>=0.12",
+]
+
+[project.scripts]
+fortune-teller   = "fortune_teller.application.ui.app:main"
+ft-scrape        = "fortune_teller.developer.scrape.cli:main"
+ft-parse         = "fortune_teller.developer.parse.cli:main"
+ft-embed         = "fortune_teller.developer.embed.cli:main"
+ft-build-index   = "fortune_teller.developer.build_index.cli:main"
+
+[dependency-groups]
+test = [
+    "pytest>=8.3",
+    "pytest-cov>=5.0",
+    "pytest-mock>=3.14",
+    "hypothesis>=6.112",
+    "coverage[toml]>=7.6",
+]
+lint = [
+    "ruff>=0.6",
+    "mypy>=1.11",
+    "pre-commit>=3.8",
+    "types-beautifulsoup4",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/fortune_teller"]
+
+[tool.ruff]
+target-version = "py313"
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM", "RUF", "N", "PL", "ARG", "TID"]
+ignore = ["PLR0913"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["PLR2004", "S101"]
+
+[tool.ruff.format]
+docstring-code-format = true
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+files = ["src/fortune_teller"]
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = [
+    "sentence_transformers.*",
+    "duckdb.*",
+    "selectolax.*",
+    "gradio.*",
+    "langchain.*",
+    "langchain_core.*",
+    "langchain_openai.*",
+    "langchain_huggingface.*",
+]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+addopts = "-ra --strict-markers --cov=fortune_teller --cov-branch --cov-report=term-missing --cov-fail-under=80"
+testpaths = ["tests"]
+markers = [
+    "unit: fast unit tests (pre-commit subset)",
+    "integration: tests touching DuckDB/SQLite/HTTP fixtures",
+    "slow: slow tests skipped from pre-commit",
+]
+
+[tool.coverage.run]
+branch = true
+source = ["fortune_teller"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+]
