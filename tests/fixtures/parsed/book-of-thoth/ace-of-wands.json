@@ -1,0 +1,50 @@
+{
+  "id": "ace-of-wands",
+  "name": "Ace of Wands",
+  "arcana": "minor",
+  "suit": "wands",
+  "number": 1,
+  "sections": [
+    {
+      "section": "overall",
+      "text": "THE ACE OF WANDS – Sun – Mars – Courage Cards Page"
+    },
+    {
+      "section": "drive",
+      "text": "The wish to create"
+    },
+    {
+      "section": "light",
+      "text": "sudden illumination, enthusiasm, inspiration, creativity, spiritual hunger, vigor, energy"
+    },
+    {
+      "section": "shadow",
+      "text": "Destruction through exaggeration, false start, vexation, cancellation"
+    },
+    {
+      "section": "keywords",
+      "text": "fire, high or strong energy, transformation"
+    },
+    {
+      "section": "advice",
+      "text": "You are full of power and energy. Start exploring where and how you can and want to use this."
+    },
+    {
+      "section": "question",
+      "text": "What attracts you most, what do you like to do? What do you find most enjoyable? In what framework can you fulfill your dreams?"
+    },
+    {
+      "section": "proposal",
+      "text": "Draw more cards for the above questions!"
+    },
+    {
+      "section": "confirmation",
+      "text": "I express my power and energy openly."
+    },
+    {
+      "section": "affirmation",
+      "text": "My life is filled with abundance and joyful happenstance."
+    }
+  ],
+  "source_url": "https://thothreadings.com/blog/ace-of-wands/"
+}

@@ -1,42 +1,44 @@
 # Book of Thoth — thothreadings.com slugs
-# One slug per line. These map to https://thothreadings.com/<slug>/
-# Spread pages are listed at the bottom, prefixed with spread:
+# Cards are at https://thothreadings.com/blog/<slug>/
+# Spread pages are at the root; prefix with "spread:" to flag them.
+# Lines starting with # are ignored. Blank lines are ignored.
+# Source: https://thothreadings.com/wp-sitemap-posts-post-1.xml
 
 # Major Arcana (22 cards)
-the-fool
-the-magus
-the-high-priestess
-the-empress
-the-emperor
-the-hierophant
-the-lovers
-the-chariot
-adjustment
-the-hermit
-fortune
-lust
-the-hanged-man
-death
-art
-the-devil
-the-tower
-the-star
-the-moon
-the-sun
-the-aeon
-the-universe
+0-the-fool
+i-the-magician
+ii-the-high-priestess
+iii-the-empress
+iv-the-emperor
+v-the-hierophant
+vi-the-lovers
+vii-the-chariot
+viii-adjustment
+ix-the-hermit
+x-the-wheel-of-fortune
+xi-the-passion-lust
+xii-the-hanged-man
+xiii-the-death
+xiv-the-art
+xv-the-devil
+xvi-the-tower
+xvii-the-star
+xviii-the-moon
+xix-the-sun
+xx-the-aeon
+xxi-the-universe
 
 # Minor Arcana — Wands (14 cards)
 ace-of-wands
-two-of-wands
-three-of-wands
-four-of-wands
-five-of-wands
-six-of-wands
-seven-of-wands
-eight-of-wands
-nine-of-wands
-ten-of-wands
+two-of-wands-dominion
+the-three-of-wands
+four-of-wands-completion
+five-of-wands-strife
+six-of-wands-victory
+seven-of-wands-valour
+eight-of-wands-swiftness
+nine-of-wands-strength
+ten-of-wands-oppression
 princess-of-wands
 prince-of-wands
 queen-of-wands
@@ -44,15 +46,15 @@ knight-of-wands
 
 # Minor Arcana — Cups (14 cards)
 ace-of-cups
-two-of-cups
-three-of-cups
-four-of-cups
-five-of-cups
-six-of-cups
-seven-of-cups
-eight-of-cups
-nine-of-cups
-ten-of-cups
+two-of-cups-love
+three-of-cups-abundance
+four-of-cups-luxury
+five-of-cups-disappointment
+six-of-cups-pleasure
+seven-of-cups-debauch
+eight-of-cups-indolence
+nine-of-cups-happiness
+ten-of-cups-satiety
 princess-of-cups
 prince-of-cups
 queen-of-cups
@@ -60,15 +62,15 @@ knight-of-cups
 
 # Minor Arcana — Swords (14 cards)
 ace-of-swords
-two-of-swords
-three-of-swords
-four-of-swords
-five-of-swords
-six-of-swords
-seven-of-swords
-eight-of-swords
-nine-of-swords
-ten-of-swords
+two-of-swords-peace
+three-of-swords-sorrow
+four-of-swords-truce
+five-of-swords-defeat
+six-of-swords-science
+seven-of-swords-futility
+eight-of-swords-interference
+nine-of-swords-cruelty
+ten-of-swords-ruin
 princess-of-swords
 prince-of-swords
 queen-of-swords
@@ -76,19 +78,19 @@ knight-of-swords
 
 # Minor Arcana — Disks (14 cards)
 ace-of-disks
-two-of-disks
-three-of-disks
-four-of-disks
-five-of-disks
-six-of-disks
-seven-of-disks
-eight-of-disks
-nine-of-disks
-ten-of-disks
+two-of-disks-change
+three-of-disks-works
+four-of-disks-power
+five-of-disks-worry
+six-of-disks-success
+seven-of-disks-failure
+eight-of-disks-prudence
+nine-of-disks-gain
+ten-of-disks-wealth
 princess-of-disks
 prince-of-disks
 queen-of-disks
 knight-of-disks
 
-# Spreads
+# Spreads (fetched from root, not /blog/)
 spread:spread-new-moon

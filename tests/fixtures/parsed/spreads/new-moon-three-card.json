@@ -1,0 +1,24 @@
+{
+  "id": "new-moon-three-card",
+  "name": "New Moon Three-Card Spread",
+  "positions": [
+    {
+      "index": 0,
+      "name": "How can I love myself more?",
+      "meaning": "How can I love myself more?",
+      "source_url": "https://thothreadings.com/spread-new-moon/"
+    },
+    {
+      "index": 1,
+      "name": "How can I bring more comfort to my life?",
+      "meaning": "How can I bring more comfort to my life?",
+      "source_url": "https://thothreadings.com/spread-new-moon/"
+    },
+    {
+      "index": 2,
+      "name": "What boundaries do I need to create or enforce?",
+      "meaning": "What boundaries do I need to create or enforce?",
+      "source_url": "https://thothreadings.com/spread-new-moon/"
+    }
+  ]
+}
