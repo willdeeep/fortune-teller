@@ -1,9 +1,268 @@
 """Pydantic v2 domain models for Fortune Teller.
 
-See plan 0004 for full specification.
+All models are immutable by default (``model_config = ConfigDict(frozen=True)``).
+Use ``model.model_copy(update={...})`` when you need a modified copy.
 """
 
 from __future__ import annotations
 
-# Domain models will be implemented in plan step 0004.
-# Placeholder to ensure the package is importable.
+import uuid
+from datetime import UTC, datetime
+from enum import StrEnum
+from typing import Annotated, Literal
+
+from pydantic import BaseModel, ConfigDict, Field, HttpUrl, model_validator
+
+# ---------------------------------------------------------------------------
+# Enums
+# ---------------------------------------------------------------------------
+
+
+class Orientation(StrEnum):
+    """Card orientation when dealt."""
+
+    UPRIGHT = "upright"
+    REVERSED = "reversed"
+
+
+class Arcana(StrEnum):
+    """Major or minor arcana."""
+
+    MAJOR = "major"
+    MINOR = "minor"
+
+
+class Suit(StrEnum):
+    """The four suits of the minor arcana (Book of Thoth naming)."""
+
+    WANDS = "wands"
+    CUPS = "cups"
+    SWORDS = "swords"
+    DISKS = "disks"
+
+
+class CardSection(StrEnum):
+    """Structured section types scraped from a card definition page."""
+
+    OVERALL = "overall"
+    DRIVE = "drive"
+    LIGHT = "light"
+    SHADOW = "shadow"
+    REVERSED = "reversed"
+    KEYWORDS = "keywords"
+    ADVICE = "advice"
+    QUESTION = "question"
+    PROPOSAL = "proposal"
+    CONFIRMATION = "confirmation"
+    AFFIRMATION = "affirmation"
+
+
+class ChunkType(StrEnum):
+    """Discriminator for vector store chunks."""
+
+    CARD_SECTION = "card_section"
+    SPREAD_POSITION = "spread_position"
+
+
+# ---------------------------------------------------------------------------
+# Card
+# ---------------------------------------------------------------------------
+
+
+class CardSectionText(BaseModel):
+    """A single labelled text section belonging to a card definition."""
+
+    model_config = ConfigDict(frozen=True)
+
+    section: CardSection
+    text: Annotated[str, Field(min_length=1)]
+
+
+class Card(BaseModel):
+    """A single Tarot card with all its structured definition text."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: Annotated[str, Field(min_length=1)]  # slug, e.g. "the-fool"
+    name: Annotated[str, Field(min_length=1)]  # "The Fool"
+    arcana: Arcana
+    suit: Suit | None = None  # None for major arcana
+    number: int | None = None  # 0-21 major, 1-14 minor
+    sections: list[CardSectionText] = Field(default_factory=list)
+    source_url: HttpUrl
+
+    @model_validator(mode="after")
+    def _validate_suit_matches_arcana(self) -> Card:
+        if self.arcana == Arcana.MINOR and self.suit is None:
+            raise ValueError("Minor arcana card must have a suit.")
+        if self.arcana == Arcana.MAJOR and self.suit is not None:
+            raise ValueError("Major arcana card must not have a suit.")
+        return self
+
+    def section_text(self, section: CardSection) -> str | None:
+        """Return the text for *section*, or ``None`` if not present."""
+        for s in self.sections:
+            if s.section == section:
+                return s.text
+        return None
+
+
+# ---------------------------------------------------------------------------
+# Deck
+# ---------------------------------------------------------------------------
+
+
+class Deck(BaseModel):
+    """A named collection of Tarot cards."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: Annotated[str, Field(min_length=1)]  # "book-of-thoth"
+    name: Annotated[str, Field(min_length=1)]  # "Book of Thoth"
+    cards: list[Card] = Field(default_factory=list)
+
+    def card_by_id(self, card_id: str) -> Card:
+        """Return the card with *card_id*.
+
+        Raises:
+            KeyError: if no card with that id exists in the deck.
+        """
+        for card in self.cards:
+            if card.id == card_id:
+                return card
+        raise KeyError(f"Card not found in deck '{self.id}': {card_id!r}")
+
+    def card_ids(self) -> list[str]:
+        """Return an ordered list of all card IDs in the deck."""
+        return [c.id for c in self.cards]
+
+
+# ---------------------------------------------------------------------------
+# Spread
+# ---------------------------------------------------------------------------
+
+
+class SpreadPosition(BaseModel):
+    """One named position within a spread (e.g. 'Past', 'Present', 'Future')."""
+
+    model_config = ConfigDict(frozen=True)
+
+    index: Annotated[int, Field(ge=0)]  # 0-based
+    name: Annotated[str, Field(min_length=1)]
+    meaning: Annotated[str, Field(min_length=1)]
+    source_url: HttpUrl
+
+
+class Spread(BaseModel):
+    """A named Tarot spread with an ordered list of positions."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: Annotated[str, Field(min_length=1)]  # "new-moon-three-card"
+    name: Annotated[str, Field(min_length=1)]  # "New Moon Three-Card Spread"
+    positions: list[SpreadPosition] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _validate_contiguous_indices(self) -> Spread:
+        indices = sorted(p.index for p in self.positions)
+        expected = list(range(len(self.positions)))
+        if indices != expected:
+            raise ValueError(f"SpreadPosition indices must be contiguous from 0, got {indices!r}.")
+        return self
+
+    def position_by_index(self, index: int) -> SpreadPosition:
+        """Return the position at *index*.
+
+        Raises:
+            KeyError: if no position with that index exists.
+        """
+        for pos in self.positions:
+            if pos.index == index:
+                return pos
+        raise KeyError(f"No position with index {index} in spread '{self.id}'.")
+
+
+# ---------------------------------------------------------------------------
+# Reading
+# ---------------------------------------------------------------------------
+
+
+class DealtCard(BaseModel):
+    """A card as dealt into a specific reading position."""
+
+    model_config = ConfigDict(frozen=True)
+
+    card_id: Annotated[str, Field(min_length=1)]
+    orientation: Orientation
+    position_index: Annotated[int, Field(ge=0)]
+
+
+class CardInterpretation(BaseModel):
+    """LLM-generated interpretation for a single dealt card."""
+
+    model_config = ConfigDict(frozen=True)
+
+    dealt: DealtCard
+    card_name: Annotated[str, Field(min_length=1)]
+    position_name: Annotated[str, Field(min_length=1)]
+    text: Annotated[str, Field(min_length=1)]
+
+
+class Reading(BaseModel):
+    """A complete Tarot reading session."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4)
+    deck_id: Annotated[str, Field(min_length=1)]
+    spread_id: Annotated[str, Field(min_length=1)]
+    dealt: list[DealtCard] = Field(default_factory=list)
+    per_card: list[CardInterpretation] = Field(default_factory=list)
+    summary: str = ""
+    created_at: datetime = Field(default_factory=lambda: datetime.now(tz=UTC))
+
+    @model_validator(mode="after")
+    def _validate_no_duplicate_card_ids(self) -> Reading:
+        card_ids = [d.card_id for d in self.dealt]
+        if len(card_ids) != len(set(card_ids)):
+            duplicates = {cid for cid in card_ids if card_ids.count(cid) > 1}
+            raise ValueError(
+                f"A reading cannot contain duplicate cards. Duplicates: {duplicates!r}"
+            )
+        return self
+
+
+# ---------------------------------------------------------------------------
+# Vector store chunk
+# ---------------------------------------------------------------------------
+
+
+class Chunk(BaseModel):
+    """A text chunk ready for embedding and storage in DuckDB.
+
+    ``embedding`` is ``None`` before the embed step and a list of floats after.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4)
+    chunk_type: ChunkType
+    deck_id: str | None = None
+    card_id: str | None = None
+    card_name: str | None = None
+    section: CardSection | None = None
+    spread_id: str | None = None
+    position_index: int | None = None
+    source_url: Annotated[str, Field(min_length=1)]
+    text: Annotated[str, Field(min_length=1)]
+    embedding: list[float] | None = None  # populated after ft-embed
+
+
+# ---------------------------------------------------------------------------
+# Convenience type aliases
+# ---------------------------------------------------------------------------
+
+#: Literal type accepted wherever only major arcana is valid.
+MajorArcana = Literal["major"]
+#: Literal type accepted wherever only minor arcana is valid.
+MinorArcana = Literal["minor"]
