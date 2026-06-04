@@ -259,6 +259,25 @@ class Chunk(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Vector search result
+# ---------------------------------------------------------------------------
+
+
+class SearchHit(BaseModel):
+    """A single hit from a vector-store search.
+
+    Pairs a :class:`Chunk` (with all its metadata) with its cosine similarity
+    score against the query embedding. Score is in ``[-1.0, 1.0]``; higher is
+    more similar.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    chunk: Chunk
+    score: float
+
+
+# ---------------------------------------------------------------------------
 # Convenience type aliases
 # ---------------------------------------------------------------------------
 
