@@ -45,3 +45,4 @@ data/
 *.swp
 *.swo
 *~
+.opencode
