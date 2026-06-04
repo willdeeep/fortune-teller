@@ -14,7 +14,19 @@ from pathlib import Path
 import pytest
 from langchain_core.messages import AIMessage
 from langchain_core.runnables import RunnableLambda
+from pydantic import HttpUrl
 
+from fortune_teller.application.models.domain import (
+    Arcana,
+    Card,
+    CardInterpretation,
+    CardSection,
+    CardSectionText,
+    DealtCard,
+    Orientation,
+    Spread,
+    SpreadPosition,
+)
 from fortune_teller.application.stores.embeddings import Embedder
 
 # ---------------------------------------------------------------------------
@@ -115,3 +127,94 @@ def stub_embedder_factory():
         return embedder
 
     return _make
+
+
+# ---------------------------------------------------------------------------
+# Sample domain models (used by chain tests, services tests, etc.)
+# ---------------------------------------------------------------------------
+
+_CARD_URL = "https://thothreadings.com/the-fool/"
+_SPREAD_URL = "https://thothreadings.com/spread-new-moon/"
+
+
+@pytest.fixture
+def sample_card() -> Card:
+    """A :class:`Card` (The Fool) with one section per :class:`CardSection` member."""
+    return Card(
+        id="the-fool",
+        name="The Fool",
+        arcana=Arcana.MAJOR,
+        sections=[
+            CardSectionText(section=CardSection.DRIVE, text="Pure potential, unformed."),
+            CardSectionText(
+                section=CardSection.LIGHT, text="Spontaneity, curiosity, leap of faith."
+            ),
+            CardSectionText(
+                section=CardSection.SHADOW, text="Recklessness, naivety, fear of commitment."
+            ),
+            CardSectionText(
+                section=CardSection.REVERSED, text="Holding back, fear of the unknown."
+            ),
+            CardSectionText(section=CardSection.KEYWORDS, text="beginnings, freedom, innocence"),
+            CardSectionText(section=CardSection.ADVICE, text="Trust the journey."),
+        ],
+        source_url=HttpUrl(_CARD_URL),
+    )
+
+
+@pytest.fixture
+def sample_spread() -> Spread:
+    """A 3-position :class:`Spread` (New Moon Three-Card)."""
+    return Spread(
+        id="new-moon-three-card",
+        name="New Moon Three-Card Spread",
+        positions=[
+            SpreadPosition(
+                index=0,
+                name="Past",
+                meaning="What was set in motion before now.",
+                source_url=HttpUrl(_SPREAD_URL),
+            ),
+            SpreadPosition(
+                index=1,
+                name="Present",
+                meaning="The current energy at the new moon.",
+                source_url=HttpUrl(_SPREAD_URL),
+            ),
+            SpreadPosition(
+                index=2,
+                name="Future",
+                meaning="What the new moon is birthing.",
+                source_url=HttpUrl(_SPREAD_URL),
+            ),
+        ],
+    )
+
+
+@pytest.fixture
+def sample_position(sample_spread: Spread) -> SpreadPosition:
+    """First position of :func:`sample_spread` (index 0, 'Past')."""
+    return sample_spread.position_by_index(0)
+
+
+@pytest.fixture
+def sample_dealt_card() -> DealtCard:
+    """The Fool dealt upright into position 0."""
+    return DealtCard(card_id="the-fool", orientation=Orientation.UPRIGHT, position_index=0)
+
+
+@pytest.fixture
+def sample_dealt_reversed() -> DealtCard:
+    """The Fool dealt reversed into position 0."""
+    return DealtCard(card_id="the-fool", orientation=Orientation.REVERSED, position_index=0)
+
+
+@pytest.fixture
+def sample_interpretation() -> CardInterpretation:
+    """A single :class:`CardInterpretation` for The Fool in 'Past' (upright)."""
+    return CardInterpretation(
+        dealt=DealtCard(card_id="the-fool", orientation=Orientation.UPRIGHT, position_index=0),
+        card_name="The Fool",
+        position_name="Past",
+        text="A new beginning seeded before you were aware of it.",
+    )
