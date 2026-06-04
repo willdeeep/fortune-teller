@@ -1,10 +1,12 @@
 """Reading service — orchestrates a Tarot reading end-to-end.
 
-In the spike this service is a thin data-carrying shell: the LangChain chains
-and vector store are injected as callables so they can be swapped for stubs
-in tests without touching any I/O.
+The service glues together a :class:`Deck`, a :class:`Spread`, and the
+two LangChain interpretation chains. All I/O-heavy dependencies
+(LangChain chains, vector store, embedder) are injected so the service
+remains unit-testable without network or disk access.
 
-Full chain/store wiring happens in plan steps 0007 and 0008.
+Full chain/store wiring happens in :func:`build_reading_service`
+(plan 0009).
 """
 
 from __future__ import annotations
@@ -13,6 +15,8 @@ import random
 from dataclasses import dataclass, field
 from typing import Protocol, runtime_checkable
 
+from fortune_teller.application.chains.per_card import build_per_card_context
+from fortune_teller.application.chains.summary import build_summary_context
 from fortune_teller.application.models.domain import (
     CardInterpretation,
     DealtCard,
@@ -74,8 +78,9 @@ class ReadingHandle:
 class ReadingService:
     """Orchestrates a Tarot reading: deck management, RAG, result assembly.
 
-    All I/O-heavy dependencies (LangChain chains, vector store) are injected
-    so the service remains unit-testable without network or disk access.
+    All I/O-heavy dependencies (LangChain chains, vector store, embedder)
+    are injected so the service remains unit-testable without network or
+    disk access.
 
     Args:
         deck:              The :class:`~fortune_teller.application.models.domain.Deck`
@@ -86,7 +91,14 @@ class ReadingService:
                            dict of context keys.  Pass ``None`` to defer wiring
                            (raises :exc:`RuntimeError` if called).
         summary_chain:     Chain that returns a summary string.  Pass ``None``
-                           to defer wiring.
+                           to skip summary generation (summary will be empty).
+        vector_store:      Optional :class:`~fortune_teller.application.stores.vector.VectorStore`
+                           used by :func:`build_per_card_context` to retrieve
+                           card-section chunks for RAG.  When ``None`` the
+                           service uses a minimal 4-key context (no retrieval).
+        embedder:          Optional :class:`~fortune_teller.application.stores.embeddings.Embedder`
+                           used to embed the card query for retrieval.  Must
+                           be provided together with *vector_store*.
     """
 
     def __init__(
@@ -95,11 +107,24 @@ class ReadingService:
         spread: Spread,
         per_card_chain: InterpretationChain | None = None,
         summary_chain: SummaryChain | None = None,
+        vector_store: object | None = None,
+        embedder: object | None = None,
     ) -> None:
         self._deck = deck
         self._spread = spread
         self._per_card_chain = per_card_chain
         self._summary_chain = summary_chain
+        # vector_store/embedder are typed as ``object`` (not the concrete
+        # classes) to avoid a runtime import of the stores package in
+        # tests that don't need RAG. mypy strict is fine because the
+        # consumer (``build_per_card_context``) accepts Protocol-like
+        # duck types.
+        self._vector_store = vector_store
+        self._embedder = embedder
+        if (vector_store is None) != (embedder is None):
+            raise ValueError(
+                "vector_store and embedder must be provided together (both or neither)."
+            )
 
     # ------------------------------------------------------------------
     # Public API
@@ -154,14 +179,25 @@ class ReadingService:
                 "per_card_chain is not configured. Inject a chain or use a stub for testing."
             )
 
-        text = self._per_card_chain.invoke(
-            {
+        # RAG context when both vector_store and embedder are wired;
+        # otherwise a minimal 4-key context (used in unit tests).
+        if self._vector_store is not None and self._embedder is not None:
+            inputs = build_per_card_context(
+                dealt=dealt,
+                card=card,
+                spread=handle.spread,
+                position=position,
+                vector_store=self._vector_store,  # type: ignore[arg-type]
+                embedder=self._embedder,  # type: ignore[arg-type]
+            )
+        else:
+            inputs = {
                 "card_name": card.name,
                 "orientation": dealt.orientation.value,
                 "position_name": position.name,
                 "position_meaning": position.meaning,
             }
-        )
+        text = self._per_card_chain.invoke(inputs)
 
         interp = CardInterpretation(
             dealt=dealt,
@@ -175,8 +211,10 @@ class ReadingService:
     def finalize(self, handle: ReadingHandle) -> Reading:
         """Produce the final :class:`Reading` with a summary.
 
-        Calls the ``summary_chain`` if configured, otherwise leaves
-        ``summary`` as an empty string (acceptable in tests).
+        Calls the ``summary_chain`` (with the structured RAG context
+        produced by :func:`build_summary_context`) if configured.
+        When ``summary_chain`` is ``None`` the summary is left as the
+        empty string.
 
         Args:
             handle: A :class:`ReadingHandle` where all positions have been
@@ -188,18 +226,8 @@ class ReadingService:
         """
         summary = ""
         if self._summary_chain is not None:
-            card_summaries = "\n\n".join(
-                f"Position {i.dealt.position_index} — "
-                f"{i.position_name} ({i.card_name}, {i.dealt.orientation}):\n"
-                f"{i.text}"
-                for i in handle.interpretations
-            )
-            summary = self._summary_chain.invoke(
-                {
-                    "spread_name": handle.spread.name,
-                    "card_summaries": card_summaries,
-                }
-            )
+            context = build_summary_context(handle.interpretations, handle.spread)
+            summary = self._summary_chain.invoke(context)
 
         return Reading(
             deck_id=handle.deck_id,
@@ -208,3 +236,83 @@ class ReadingService:
             per_card=list(handle.interpretations),
             summary=summary,
         )
+
+
+# ---------------------------------------------------------------------------
+# Wiring factory
+# ---------------------------------------------------------------------------
+
+
+def build_reading_service(
+    settings: object,
+    *,
+    deck_id: str = "book-of-thoth",
+    spread_id: str | None = None,
+) -> ReadingService:
+    """Construct a fully-wired :class:`ReadingService` from app settings.
+
+    Wires together:
+
+    - :class:`~fortune_teller.application.stores.embeddings.Embedder` (lazy)
+    - :class:`~fortune_teller.application.stores.vector.VectorStore` (opened)
+    - :class:`~fortune_teller.application.chains.per_card.build_chat_model`
+    - :func:`build_per_card_chain` and :func:`build_summary_chain`
+    - The :class:`Deck` and :class:`Spread` loaded from
+      ``settings.ft_data_dir / "parsed"``.
+
+    The returned service is ready to be passed to
+    :func:`~fortune_teller.application.ui.app.build_app`. The vector
+    store is left open for the lifetime of the process.
+
+    Args:
+        settings:  A :class:`~fortune_teller.application.config.Settings`
+                   instance (typed as ``object`` to avoid a circular
+                   import for the UI module).
+        deck_id:   Deck slug to load (default ``"book-of-thoth"``).
+        spread_id: Spread slug to load, or ``None`` to pick the first
+                   spread found under ``data/parsed/spreads/``.
+
+    Raises:
+        FileNotFoundError: If the parsed data directory is missing.
+    """
+    # Lazy imports so test patches on the source modules (``stores.embeddings``
+    # and ``stores.vector``) are picked up at call time.
+    from fortune_teller.application.chains.per_card import (
+        build_chat_model,
+        build_per_card_chain,
+    )
+    from fortune_teller.application.chains.summary import build_summary_chain
+    from fortune_teller.application.services.loading import (
+        load_deck,
+        load_first_spread,
+        load_spread,
+    )
+    from fortune_teller.application.stores.embeddings import Embedder
+    from fortune_teller.application.stores.vector import VectorStore
+
+    parsed_dir = settings.ft_data_dir / "parsed"  # type: ignore[attr-defined]
+    deck = load_deck(parsed_dir, deck_id)
+    spread = load_spread(parsed_dir, spread_id) if spread_id else load_first_spread(parsed_dir)
+
+    embedder = Embedder()
+    db_path = settings.ft_data_dir / "duckdb" / "fortune.duckdb"  # type: ignore[attr-defined]
+    vector_store = VectorStore(str(db_path), dimension=embedder.dimension)
+    vector_store.open()
+
+    llm = build_chat_model()
+
+    # ``build_per_card_chain`` / ``build_summary_chain`` return a generic
+    # LangChain ``Runnable`` whose ``invoke`` signature is wider than the
+    # ``InterpretationChain``/``SummaryChain`` Protocols expect. The
+    # Protocols are satisfied at runtime; we cast here to keep mypy happy.
+    per_card_chain: InterpretationChain = build_per_card_chain(llm)
+    summary_chain: SummaryChain = build_summary_chain(llm)
+
+    return ReadingService(
+        deck=deck,
+        spread=spread,
+        per_card_chain=per_card_chain,
+        summary_chain=summary_chain,
+        vector_store=vector_store,
+        embedder=embedder,
+    )
