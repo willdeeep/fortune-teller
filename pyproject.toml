@@ -30,10 +30,10 @@ dev = [
 
 [project.scripts]
 fortune-teller   = "fortune_teller.application.ui.app:main"
-ft-scrape        = "fortune_teller.developer.scrape.cli:main"
-ft-parse         = "fortune_teller.developer.parse.cli:main"
-ft-embed         = "fortune_teller.developer.embed.cli:main"
-ft-build-index   = "fortune_teller.developer.build_index.cli:main"
+ft-scrape        = "fortune_teller.developer.scrape.cli:app"
+ft-parse         = "fortune_teller.developer.parse.cli:app"
+ft-embed         = "fortune_teller.developer.embed.cli:app"
+ft-build-index   = "fortune_teller.developer.build_index.cli:app"
 
 [dependency-groups]
 test = [
