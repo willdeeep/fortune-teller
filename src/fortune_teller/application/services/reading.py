@@ -277,18 +277,20 @@ def build_reading_service(
     """
     # Lazy imports so test patches on the source modules (``stores.embeddings``
     # and ``stores.vector``) are picked up at call time.
-    from fortune_teller.application.chains.per_card import (
+    from fortune_teller.application.chains.per_card import (  # noqa: PLC0415
         build_chat_model,
         build_per_card_chain,
     )
-    from fortune_teller.application.chains.summary import build_summary_chain
-    from fortune_teller.application.services.loading import (
+    from fortune_teller.application.chains.summary import (  # noqa: PLC0415
+        build_summary_chain,
+    )
+    from fortune_teller.application.services.loading import (  # noqa: PLC0415
         load_deck,
         load_first_spread,
         load_spread,
     )
-    from fortune_teller.application.stores.embeddings import Embedder
-    from fortune_teller.application.stores.vector import VectorStore
+    from fortune_teller.application.stores.embeddings import Embedder  # noqa: PLC0415
+    from fortune_teller.application.stores.vector import VectorStore  # noqa: PLC0415
 
     parsed_dir = settings.ft_data_dir / "parsed"  # type: ignore[attr-defined]
     deck = load_deck(parsed_dir, deck_id)

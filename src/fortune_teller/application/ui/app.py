@@ -117,8 +117,10 @@ def main() -> None:
     """Console-script entry point: build and launch the Gradio app."""
     # Lazy imports so importing this module doesn't load config or
     # heavy services; only the entry point pays the cost.
-    from fortune_teller.application.config import settings
-    from fortune_teller.application.services.reading import build_reading_service
+    from fortune_teller.application.config import settings  # noqa: PLC0415
+    from fortune_teller.application.services.reading import (  # noqa: PLC0415
+        build_reading_service,
+    )
 
     service = build_reading_service(settings)
     demo = build_app(service)

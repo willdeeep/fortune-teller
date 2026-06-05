@@ -114,7 +114,9 @@ class _StubReadingService:
         self._counter = 0
 
     def start(self, seed: int | None = None) -> ReadingHandle:  # noqa: ARG002
-        from fortune_teller.application.services.deck import DeckSession
+        from fortune_teller.application.services.deck import (  # noqa: PLC0415
+            DeckSession,
+        )
 
         session = DeckSession(self._deck, rng=__import__("random").Random(0))
         return ReadingHandle(

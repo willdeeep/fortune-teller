@@ -168,7 +168,9 @@ class TestBuildChatModel:
         assert llm.temperature == 0.0  # type: ignore[attr-defined]
 
     def test_uses_overridden_settings(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        from fortune_teller.application import config  # noqa: I001 — test needs late import to patch settings
+        from fortune_teller.application import (  # noqa: PLC0415
+            config,
+        )  # test needs late import to patch settings
 
         monkeypatch.setattr(
             config,
@@ -180,9 +182,11 @@ class TestBuildChatModel:
             ),
         )
         # Reload the chain module to pick up the patched settings.
-        import importlib
+        import importlib  # noqa: PLC0415
 
-        from fortune_teller.application.chains import per_card
+        from fortune_teller.application.chains import (  # noqa: PLC0415
+            per_card,
+        )
 
         importlib.reload(per_card)
         try:
