@@ -9,6 +9,8 @@ plus a description of the spread.
 
 from __future__ import annotations
 
+from typing import Any
+
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import Runnable
@@ -58,7 +60,7 @@ summary_prompt: ChatPromptTemplate = ChatPromptTemplate.from_messages(
 # ---------------------------------------------------------------------------
 
 
-def build_summary_chain(llm: Runnable) -> Runnable:
+def build_summary_chain(llm: Runnable[Any, Any]) -> Runnable[Any, Any]:
     """Return a chain ``summary_prompt | llm | StrOutputParser()``.
 
     Args:

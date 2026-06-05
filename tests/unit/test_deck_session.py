@@ -276,6 +276,11 @@ class TestDeckSessionOrientation:
     """Orientation should be roughly 50/50 over many draws."""
 
     _TOLERANCE: ClassVar[float] = 0.05  # allow 45%-55% range over 2000 draws
+    # Chi-square critical values for 1 degree of freedom:
+    #   p=0.05 → 3.841
+    #   p=0.01 → 6.635
+    #   p=0.001 → 10.828
+    _CHI_SQUARE_P05: ClassVar[float] = 3.841
 
     def test_orientation_is_approximately_uniform(self) -> None:
         deck = _make_deck(1)
@@ -288,6 +293,35 @@ class TestDeckSessionOrientation:
         ratio = reversed_count / n_trials
         assert abs(ratio - 0.5) < self._TOLERANCE, (
             f"Expected ~50% reversed, got {ratio:.1%} over {n_trials} trials"
+        )
+
+    def test_orientation_passes_chi_square_at_p005(self) -> None:
+        """A chi-square goodness-of-fit test against a 50/50 distribution.
+
+        The orientation flip is a Bernoulli(0.5) trial, so the count of
+        REVERSED outcomes over many deals should not significantly
+        deviate from n/2. The chi-square statistic with 1 degree of
+        freedom at p=0.05 is 3.841 — we expect this test to pass
+        comfortably given the deterministic seed sequence.
+        """
+        deck = _make_deck(1)
+        n_trials = 2000
+        reversed_count = 0
+        for trial in range(n_trials):
+            session = DeckSession(deck, rng=random.Random(trial))
+            if session.deal_one(0).orientation == Orientation.REVERSED:
+                reversed_count += 1
+
+        expected = n_trials / 2
+        observed_upright = n_trials - reversed_count
+        # Chi-square = Σ (O - E)² / E for each category
+        chi_square = (reversed_count - expected) ** 2 / expected + (
+            observed_upright - expected
+        ) ** 2 / expected
+        assert chi_square < self._CHI_SQUARE_P05, (
+            f"Chi-square={chi_square:.3f} exceeds p=0.05 critical value "
+            f"({self._CHI_SQUARE_P05:.3f}) for {n_trials} trials — "
+            f"orientation distribution is not 50/50 (reversed={reversed_count})"
         )
 
 

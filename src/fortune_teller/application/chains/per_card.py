@@ -11,6 +11,8 @@ a stub LLM (no vector store needed in those tests).
 
 from __future__ import annotations
 
+from typing import Any
+
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import Runnable
@@ -91,7 +93,7 @@ def build_chat_model() -> ChatOpenAI:
 # ---------------------------------------------------------------------------
 
 
-def build_per_card_chain(llm: Runnable) -> Runnable:
+def build_per_card_chain(llm: Runnable[Any, Any]) -> Runnable[Any, Any]:
     """Return a chain ``per_card_prompt | llm | StrOutputParser()``.
 
     Args:

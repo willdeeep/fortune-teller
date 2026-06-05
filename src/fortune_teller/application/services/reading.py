@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import random
 from dataclasses import dataclass, field
-from typing import Protocol, runtime_checkable
+from typing import Protocol, cast, runtime_checkable
 
 from fortune_teller.application.chains.per_card import build_per_card_context
 from fortune_teller.application.chains.summary import build_summary_context
@@ -305,8 +305,8 @@ def build_reading_service(
     # LangChain ``Runnable`` whose ``invoke`` signature is wider than the
     # ``InterpretationChain``/``SummaryChain`` Protocols expect. The
     # Protocols are satisfied at runtime; we cast here to keep mypy happy.
-    per_card_chain: InterpretationChain = build_per_card_chain(llm)
-    summary_chain: SummaryChain = build_summary_chain(llm)
+    per_card_chain = cast(InterpretationChain, build_per_card_chain(llm))
+    summary_chain = cast(SummaryChain, build_summary_chain(llm))
 
     return ReadingService(
         deck=deck,

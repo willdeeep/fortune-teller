@@ -20,7 +20,7 @@ Run via::
 from __future__ import annotations
 
 from collections.abc import Iterator
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import gradio as gr
 
@@ -110,7 +110,7 @@ def build_app(reading_service: ReadingService) -> gr.Blocks:
             outputs=[*card_panels, summary_box],
         )
 
-    return demo
+    return cast(gr.Blocks, demo)
 
 
 def main() -> None:
