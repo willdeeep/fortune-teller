@@ -84,6 +84,9 @@ uv run mypy src
 | `v0.2.0` | User login (local, hashed password) |
 | `v0.3.0` | Multiple decks, multiple spreads |
 | `v0.4.0` | Manual card entry mode |
+| `v0.5.0` | Scrape, store, and serve card images |
+| `v0.6.0` | Updated UI — overlay relevant card images with each card's text |
+| `v0.7.0` | Bundle local embeddings model so the app runs fully offline after install (no HF Hub fetch) |
 
 ## License
 

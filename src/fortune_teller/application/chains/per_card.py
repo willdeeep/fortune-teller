@@ -83,7 +83,13 @@ def build_chat_model() -> ChatOpenAI:
         api_key=settings.openai_api_key,
         model=settings.chat_model,
         temperature=0.0,
-        timeout=60,
+        # 180s is a defensive upper bound for the largest prompt we send
+        # (the summary chain with three per-card interpretations plus the
+        # spread description). With llama-server running on the M2 GPU
+        # (the `-ngl 99` launch flag), the same call typically finishes in
+        # 5-10s. CPU-only fallback stays within the budget for the
+        # 4B-class model at Q5_K_M.
+        timeout=180,
         max_retries=2,
     )
 
