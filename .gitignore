@@ -36,6 +36,8 @@ data/
 
 # SQLite
 *.db
+*.db-wal
+*.db-shm
 *.sqlite
 *.sqlite3
 
@@ -46,3 +48,8 @@ data/
 *.swo
 *~
 .opencode
+.claude
+
+# Exception: data/models/ is the install destination for ft-fetch-models
+# and should be committed so the app can run offline after the one-time fetch
+!data/models/

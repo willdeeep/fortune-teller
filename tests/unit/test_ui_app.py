@@ -15,7 +15,9 @@ store, or embedder.
 
 from __future__ import annotations
 
+import uuid
 from typing import ClassVar
+from uuid import UUID
 
 import gradio as gr
 import pytest
@@ -29,8 +31,11 @@ from fortune_teller.application.models.domain import (
     CardSectionText,
     Chunk,
     ChunkType,
+    DealtCard,
     Deck,
+    Orientation,
     Reading,
+    ReadingListItem,
     Spread,
     SpreadPosition,
 )
@@ -38,6 +43,7 @@ from fortune_teller.application.services.reading import ReadingHandle, ReadingSe
 from fortune_teller.application.stores.vector import VectorStore
 from fortune_teller.application.ui.app import (
     _format_card_text,
+    _format_reading_detail,
     build_app,
     run_reading_generator,
 )
@@ -403,3 +409,91 @@ class TestRagWiringInService:
         assert "position_meaning" in ctx
         # And the returned interp text came from the chain.
         assert "INTERP" in interp.text
+
+
+# ---------------------------------------------------------------------------
+# History tab
+# ---------------------------------------------------------------------------
+
+
+class _StubHistoryStore:
+    """In-memory HistoryStore double for UI tests."""
+
+    def __init__(self) -> None:
+        self.saved: list[Reading] = []
+
+    def save(self, reading: Reading) -> None:
+        self.saved.append(reading)
+
+    def list_recent(self, limit: int = 50) -> list[ReadingListItem]:
+
+        return [
+            ReadingListItem(
+                id=r.id,
+                deck_id=r.deck_id,
+                spread_id=r.spread_id,
+                card_names=[i.card_name for i in r.per_card],
+                summary_preview=r.summary[:120] if len(r.summary) > 120 else r.summary,
+                created_at=r.created_at,
+            )
+            for r in reversed(self.saved[-limit:])
+        ]
+
+    def get(self, reading_id: UUID) -> Reading | None:
+        for r in self.saved:
+            if r.id == reading_id:
+                return r
+        return None
+
+
+@pytest.mark.unit
+class TestBuildAppWithHistory:
+    def test_build_app_with_history_store(self, stub_service: _StubReadingService) -> None:
+        history = _StubHistoryStore()
+        demo = build_app(stub_service, history_store=history)
+        assert isinstance(demo, gr.Blocks)
+        # History tab should contain a Dataframe
+        dataframes = [c for c in demo.blocks.values() if isinstance(c, gr.Dataframe)]
+        assert len(dataframes) >= 1
+
+    def test_build_app_without_history_store(self, stub_service: _StubReadingService) -> None:
+        demo = build_app(stub_service, history_store=None)
+        assert isinstance(demo, gr.Blocks)
+        # Still a valid Blocks app, just without the History tab content
+
+    def test_history_store_backwards_compatible(self, stub_service: _StubReadingService) -> None:
+        """build_app still works without history_store (backward compat)."""
+        demo = build_app(stub_service)
+        assert demo.title == "Fortune Teller"
+
+    def test_format_reading_detail_finds_reading(self) -> None:
+        """_format_reading_detail returns formatted text for a known reading."""
+        history = _StubHistoryStore()
+        reading = Reading(
+            deck_id="test-deck",
+            spread_id="test-spread",
+            dealt=[
+                DealtCard(card_id="the-fool", orientation=Orientation.UPRIGHT, position_index=0)
+            ],
+            per_card=[
+                CardInterpretation(
+                    dealt=DealtCard(
+                        card_id="the-fool", orientation=Orientation.UPRIGHT, position_index=0
+                    ),
+                    card_name="The Fool",
+                    position_name="Past",
+                    text="New beginnings.",
+                ),
+            ],
+            summary="A short summary.",
+        )
+        history.save(reading)
+        result = _format_reading_detail(str(reading.id), history)
+        assert "The Fool" in result
+        assert "A short summary." in result
+
+    def test_format_reading_detail_returns_empty_for_missing(self) -> None:
+        """_format_reading_detail returns empty string for unknown ID."""
+        history = _StubHistoryStore()
+        result = _format_reading_detail(str(uuid.uuid4()), history)
+        assert result == ""

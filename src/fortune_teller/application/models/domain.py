@@ -233,6 +233,29 @@ class Reading(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Reading history list item (lightweight row for UI)
+# ---------------------------------------------------------------------------
+
+
+class ReadingListItem(BaseModel):
+    """Lightweight row for the reading-history list UI.
+
+    Does *not* contain the full payload — just enough to render a list
+    row. Retrieve the full :class:`Reading` via
+    :meth:`SQLiteStore.get` when the user selects a row.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    id: uuid.UUID
+    deck_id: str
+    spread_id: str
+    card_names: list[str]
+    summary_preview: str
+    created_at: datetime
+
+
+# ---------------------------------------------------------------------------
 # Vector store chunk
 # ---------------------------------------------------------------------------
 

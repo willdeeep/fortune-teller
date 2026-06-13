@@ -9,7 +9,9 @@ See plan 0010 for full fixture specification.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from pathlib import Path
+from uuid import UUID
 
 import pytest
 from langchain_core.messages import AIMessage
@@ -24,6 +26,7 @@ from fortune_teller.application.models.domain import (
     CardSectionText,
     DealtCard,
     Orientation,
+    Reading,
     Spread,
     SpreadPosition,
 )
@@ -218,3 +221,80 @@ def sample_interpretation() -> CardInterpretation:
         position_name="Past",
         text="A new beginning seeded before you were aware of it.",
     )
+
+
+# ---------------------------------------------------------------------------
+# Sample Reading (fully-formed, for history / SQLite round-trip tests)
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def sample_reading() -> Reading:
+    """A fully-formed :class:`Reading` with 3 dealt cards + interpretations."""
+    fixed_id = UUID("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
+    fixed_time = datetime(2025, 1, 15, 12, 0, 0, tzinfo=UTC)
+    return Reading(
+        id=fixed_id,
+        deck_id="book-of-thoth",
+        spread_id="new-moon-three-card",
+        dealt=[
+            DealtCard(card_id="the-fool", orientation=Orientation.UPRIGHT, position_index=0),
+            DealtCard(card_id="the-magician", orientation=Orientation.UPRIGHT, position_index=1),
+            DealtCard(
+                card_id="the-high-priestess", orientation=Orientation.REVERSED, position_index=2
+            ),
+        ],
+        per_card=[
+            CardInterpretation(
+                dealt=DealtCard(
+                    card_id="the-fool", orientation=Orientation.UPRIGHT, position_index=0
+                ),
+                card_name="The Fool",
+                position_name="Past",
+                text="A bold new beginning is stirring beneath the surface.",
+            ),
+            CardInterpretation(
+                dealt=DealtCard(
+                    card_id="the-magician", orientation=Orientation.UPRIGHT, position_index=1
+                ),
+                card_name="The Magician",
+                position_name="Present",
+                text="You have all the tools you need right now.",
+            ),
+            CardInterpretation(
+                dealt=DealtCard(
+                    card_id="the-high-priestess",
+                    orientation=Orientation.REVERSED,
+                    position_index=2,
+                ),
+                card_name="The High Priestess",
+                position_name="Future",
+                text="Inner voice is muffled — take time to listen.",
+            ),
+        ],
+        summary=(
+            "A reading about new beginnings harnessing present potential "
+            "while quieter insight awaits."
+        ),
+        created_at=fixed_time,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Stub HistoryStore (records saves for assertion in tests)
+# ---------------------------------------------------------------------------
+
+
+class _StubHistoryStore:
+    """In-memory :class:`HistoryStore` double that records calls to ``save()``."""
+
+    def __init__(self) -> None:
+        self.saved: list[Reading] = []
+
+    def save(self, reading: Reading) -> None:
+        self.saved.append(reading)
+
+
+@pytest.fixture
+def stub_history_store() -> _StubHistoryStore:
+    return _StubHistoryStore()

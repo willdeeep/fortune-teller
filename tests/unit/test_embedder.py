@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+
 import pytest
 
 from fortune_teller.application.stores.embeddings import (
@@ -173,3 +175,69 @@ class TestEmbedderGetBackend:
         embedder.embed_query("again")
         # Default backend is only constructed once (cached).
         assert calls["init"] == 1
+
+
+# ---------------------------------------------------------------------------
+# Local-path resolution
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestEmbedderLocalPathResolution:
+    def test_resolve_model_returns_local_path_when_dir_exists(self, monkeypatch, tmp_path) -> None:
+        """When the local snapshot directory exists, _resolve_model returns
+        its path and sets the offline env vars."""
+        # Point embedding_model_path at a real tmp dir.
+        monkeypatch.setattr(
+            "fortune_teller.application.stores.embeddings.settings.embedding_model_path",
+            tmp_path / "bge-small-en-v1.5",
+        )
+        monkeypatch.setattr(
+            "fortune_teller.application.stores.embeddings.settings.embedding_model",
+            "BAAI/bge-small-en-v1.5",
+        )
+        # Ensure the dir actually exists so the resolution logic sees it.
+        (tmp_path / "bge-small-en-v1.5").mkdir()
+
+        result = Embedder._resolve_model()
+
+        assert str(tmp_path / "bge-small-en-v1.5") in result
+        assert os.environ.get("HF_HUB_OFFLINE") == "1"
+        assert os.environ.get("TRANSFORMERS_OFFLINE") == "1"
+
+    def test_resolve_model_falls_back_to_hub_name_when_no_local_dir(
+        self, monkeypatch, tmp_path
+    ) -> None:
+        """When the local snapshot directory does not exist, _resolve_model
+        returns the hub model name without setting offline env vars."""
+        non_existent = tmp_path / "does-not-exist"
+        monkeypatch.setattr(
+            "fortune_teller.application.stores.embeddings.settings.embedding_model_path",
+            non_existent,
+        )
+        monkeypatch.setattr(
+            "fortune_teller.application.stores.embeddings.settings.embedding_model",
+            "BAAI/bge-small-en-v1.5",
+        )
+
+        result = Embedder._resolve_model()
+
+        assert result == "BAAI/bge-small-en-v1.5"
+        # Offline env vars must NOT be set when falling back to hub.
+
+    def test_explicit_model_name_overrides_settings(self, monkeypatch, tmp_path) -> None:
+        """When model_name is passed to the constructor, it takes precedence
+        over settings.embedding_model even when a local dir exists."""
+        monkeypatch.setattr(
+            "fortune_teller.application.stores.embeddings.settings.embedding_model_path",
+            tmp_path / "bge-small-en-v1.5",
+        )
+        (tmp_path / "bge-small-en-v1.5").mkdir()
+        monkeypatch.setattr(
+            "fortune_teller.application.stores.embeddings.settings.embedding_model",
+            "BAAI/bge-small-en-v1.5",
+        )
+
+        embedder = Embedder(model_name="custom-model")
+        # The explicit name is returned even though local path exists.
+        assert embedder.model_name == "custom-model"

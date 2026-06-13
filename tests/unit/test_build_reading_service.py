@@ -272,3 +272,41 @@ class TestBuildReadingService:
         )
         with pytest.raises(FileNotFoundError):
             build_reading_service(settings)
+
+    def test_history_store_passed_through(
+        self,
+        tmp_path: Path,
+        patched_dependencies,  # noqa: ARG002
+    ) -> None:
+        """build_reading_service passes history_store to ReadingService."""
+        _populated_parsed_dir(tmp_path)
+        settings = SimpleNamespace(
+            ft_data_dir=tmp_path,
+            openai_base_url="http://example.test/v1",
+            openai_api_key="sk-test",
+            chat_model="stub-model",
+        )
+
+        class _StubHistory:
+            def save(self, reading: object) -> None:
+                pass
+
+        stub = _StubHistory()
+        service = build_reading_service(settings, history_store=stub)
+        assert service._history_store is stub
+
+    def test_history_store_none_by_default(
+        self,
+        tmp_path: Path,
+        patched_dependencies,  # noqa: ARG002
+    ) -> None:
+        """build_reading_service defaults history_store to None."""
+        _populated_parsed_dir(tmp_path)
+        settings = SimpleNamespace(
+            ft_data_dir=tmp_path,
+            openai_base_url="http://example.test/v1",
+            openai_api_key="sk-test",
+            chat_model="stub-model",
+        )
+        service = build_reading_service(settings)
+        assert service._history_store is None
