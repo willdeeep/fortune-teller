@@ -10,7 +10,7 @@
 - Auto-deal with no-replace guarantee within a reading
 - Per-card interpretations grounded in scraped card definitions
 - Reading summary that surfaces cross-card reinforcing and conflicting themes
-- Runs entirely on-device — no external API keys required
+- Runs entirely on-device — no external API keys or network required after the one-time ft-fetch-models step
 
 ## Requirements
 
@@ -29,6 +29,7 @@ uv sync --extra dev --group test --group lint
 uv run pre-commit install
 
 # 3. One-time data pipeline (scrape → parse → embed → index)
+uv run ft-fetch-models      # download embedding model for offline use
 uv run ft-scrape
 uv run ft-parse
 uv run ft-embed
@@ -60,7 +61,8 @@ Override any setting with an environment variable or `.env` file:
 | `OPENAI_API_KEY`   | `sk-no-key`                    | Any non-empty string |
 | `CHAT_MODEL`       | `local-model`                  | Model name as reported by server |
 | `FT_DATA_DIR`      | `./data`                       | Path to data directory |
-| `EMBEDDING_MODEL`  | `BAAI/bge-small-en-v1.5`       | HuggingFace embedding model |
+| `EMBEDDING_MODEL`      | `BAAI/bge-small-en-v1.5`                | HuggingFace embedding model (name or local path) |
+| `EMBEDDING_MODEL_PATH` | `./data/models/bge-small-en-v1.5`      | Local path for offline embedding model |
 
 ## Architecture
 
@@ -80,13 +82,14 @@ uv run mypy src
 | Version | Scope |
 | ------- | ----- |
 | `v0.0.1-spike` | Single deck, single spread, auto-deal, no auth |
-| `v0.1.0` | Reading history persistence (SQLite) |
-| `v0.2.0` | User login (local, hashed password) |
-| `v0.3.0` | Multiple decks, multiple spreads |
-| `v0.4.0` | Manual card entry mode |
-| `v0.5.0` | Scrape, store, and serve card images |
-| `v0.6.0` | Updated UI — overlay relevant card images with each card's text |
-| `v0.7.0` | Bundle local embeddings model so the app runs fully offline after install (no HF Hub fetch) |
+| `v0.1.0` | Bundle local embeddings model so the app runs fully offline after install (no HF Hub fetch) |
+| `v0.2.0` | Reading history persistence (SQLite) |
+| `v0.3.0` | Scrape, store, and serve card images |
+| `v0.4.0` | Updated UI — overlay relevant card images with each card's text |
+| `v0.5.0` | Interactive detail views — click a card name for a popup with its full structured entry + image + source attribution; hover a position title for a floating definition with a source-attribution link |
+| `v0.6.0` | Manual card entry mode |
+| `v0.7.0` | Multiple decks, multiple spreads |
+| `v0.8.0` | User login (local, hashed password) |
 
 ## License
 

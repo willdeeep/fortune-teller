@@ -34,6 +34,7 @@ ft-scrape        = "fortune_teller.developer.scrape.cli:app"
 ft-parse         = "fortune_teller.developer.parse.cli:app"
 ft-embed         = "fortune_teller.developer.embed.cli:app"
 ft-build-index   = "fortune_teller.developer.build_index.cli:app"
+ft-fetch-models  = "fortune_teller.developer.fetch_models.cli:main"
 
 [dependency-groups]
 test = [
@@ -80,6 +81,7 @@ plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
 module = [
+    "huggingface_hub.*",
     "sentence_transformers.*",
     "duckdb.*",
     "selectolax.*",

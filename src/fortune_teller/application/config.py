@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     openai_api_key: str = "sk-no-key"
     chat_model: str = "local-model"
     embedding_model: str = "BAAI/bge-small-en-v1.5"
+    embedding_model_path: Path = Path("./data/models/bge-small-en-v1.5")
     ft_data_dir: Path = Path("./data")
 
     model_config = {  # pydantic v2 style
