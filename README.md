@@ -55,14 +55,15 @@ and do **not** require a server.
 
 Override any setting with an environment variable or `.env` file:
 
-| Variable           | Default                        | Description |
-| ------------------ | ------------------------------ | ----------- |
-| `OPENAI_BASE_URL`  | `http://127.0.0.1:8080/v1`     | llama.cpp server |
-| `OPENAI_API_KEY`   | `sk-no-key`                    | Any non-empty string |
-| `CHAT_MODEL`       | `local-model`                  | Model name as reported by server |
-| `FT_DATA_DIR`      | `./data`                       | Path to data directory |
-| `EMBEDDING_MODEL`      | `BAAI/bge-small-en-v1.5`                | HuggingFace embedding model (name or local path) |
-| `EMBEDDING_MODEL_PATH` | `./data/models/bge-small-en-v1.5`      | Local path for offline embedding model |
+| Variable               | Default                           | Description                                      |
+| ---------------------- | --------------------------------- | ------------------------------------------------ |
+| `OPENAI_BASE_URL`      | `http://127.0.0.1:8080/v1`        | llama.cpp server                                 |
+| `OPENAI_API_KEY`       | `sk-no-key`                       | Any non-empty string                             |
+| `CHAT_MODEL`           | `local-model`                     | Model name as reported by server                 |
+| `FT_DATA_DIR`          | `./data`                          | Path to data directory                           |
+| `SQLITE_PATH`          | `./data/sqlite/fortune.db`        | Path to SQLite reading-history database          |
+| `EMBEDDING_MODEL`      | `BAAI/bge-small-en-v1.5`          | HuggingFace embedding model (name or local path) |
+| `EMBEDDING_MODEL_PATH` | `./data/models/bge-small-en-v1.5` | Local path for offline embedding model           |
 
 ## Architecture
 
@@ -79,17 +80,17 @@ uv run mypy src
 
 ## Roadmap
 
-| Version | Scope |
-| ------- | ----- |
-| `v0.0.1-spike` | Single deck, single spread, auto-deal, no auth |
-| `v0.1.0` | Bundle local embeddings model so the app runs fully offline after install (no HF Hub fetch) |
-| `v0.2.0` | Reading history persistence (SQLite) |
-| `v0.3.0` | Scrape, store, and serve card images |
-| `v0.4.0` | Updated UI — overlay relevant card images with each card's text |
-| `v0.5.0` | Interactive detail views — click a card name for a popup with its full structured entry + image + source attribution; hover a position title for a floating definition with a source-attribution link |
-| `v0.6.0` | Manual card entry mode |
-| `v0.7.0` | Multiple decks, multiple spreads |
-| `v0.8.0` | User login (local, hashed password) |
+| Version        | Scope                                                                                                                                                                                                 |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `v0.0.1-spike` | Single deck, single spread, auto-deal, no auth                                                                                                                                                        |
+| `v0.1.0`       | Bundle local embeddings model so the app runs fully offline after install (no HF Hub fetch)                                                                                                           |
+| `v0.2.0`       | Reading history persistence (SQLite)                                                                                                                                                                  |
+| `v0.3.0`       | Scrape, store, and serve card images                                                                                                                                                                  |
+| `v0.4.0`       | Updated UI — overlay relevant card images with each card's text                                                                                                                                       |
+| `v0.5.0`       | Interactive detail views — click a card name for a popup with its full structured entry + image + source attribution; hover a position title for a floating definition with a source-attribution link |
+| `v0.6.0`       | Manual card entry mode                                                                                                                                                                                |
+| `v0.7.0`       | Multiple decks, multiple spreads                                                                                                                                                                      |
+| `v0.8.0`       | User login (local, hashed password)                                                                                                                                                                   |
 
 ## License
 

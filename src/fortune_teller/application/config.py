@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     embedding_model: str = "BAAI/bge-small-en-v1.5"
     embedding_model_path: Path = Path("./data/models/bge-small-en-v1.5")
     ft_data_dir: Path = Path("./data")
+    sqlite_path: Path = Path("./data/sqlite/fortune.db")
 
     model_config = {  # pydantic v2 style
         "env_file": ".env",
