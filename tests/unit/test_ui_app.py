@@ -15,7 +15,10 @@ store, or embedder.
 
 from __future__ import annotations
 
+import uuid
+from pathlib import Path
 from typing import ClassVar
+from uuid import UUID
 
 import gradio as gr
 import pytest
@@ -29,8 +32,11 @@ from fortune_teller.application.models.domain import (
     CardSectionText,
     Chunk,
     ChunkType,
+    DealtCard,
     Deck,
+    Orientation,
     Reading,
+    ReadingListItem,
     Spread,
     SpreadPosition,
 )
@@ -38,6 +44,7 @@ from fortune_teller.application.services.reading import ReadingHandle, ReadingSe
 from fortune_teller.application.stores.vector import VectorStore
 from fortune_teller.application.ui.app import (
     _format_card_text,
+    _format_reading_detail,
     build_app,
     run_reading_generator,
 )
@@ -224,33 +231,40 @@ class TestRunReadingGenerator:
         stub_service: _StubReadingService,
     ) -> None:
         snapshots = list(run_reading_generator(stub_service))
-        # First snapshot: only panel 0 filled, summary is empty.
+        n = 3  # 3 positions in the stub spread
+        # Format: (img_0, …, img_{n-1}, panel_0, …, panel_{n-1}, summary)
         s0 = snapshots[0]
-        assert s0[0] != ""
-        assert s0[1] == "" and s0[2] == ""
-        assert s0[3] == ""
+        # First snapshot: panel 0 filled, others empty, summary empty.
+        # Image slots are None (no images_dir), so indices 0..2 are None.
+        assert s0[0] is None and s0[1] is None and s0[2] is None  # image slots
+        assert s0[n] != ""  # panel 0 (index n)
+        assert s0[n + 1] == "" and s0[n + 2] == ""  # panels 1, 2
+        assert s0[-1] == ""  # summary
         # Second snapshot: panels 0 and 1 filled.
         s1 = snapshots[1]
-        assert s1[0] != "" and s1[1] != ""
-        assert s1[2] == ""
+        assert s1[n] != "" and s1[n + 1] != ""
+        assert s1[n + 2] == ""
         # Third snapshot: all three panels filled, summary still empty.
         s2 = snapshots[2]
-        assert s2[0] != "" and s2[1] != "" and s2[2] != ""
-        assert s2[3] == ""
+        assert s2[n] != "" and s2[n + 1] != "" and s2[n + 2] != ""
+        assert s2[-1] == ""
         # Fourth snapshot: all panels + summary populated.
         s3 = snapshots[3]
-        assert s3[0] != "" and s3[1] != "" and s3[2] != ""
-        assert s3[3] != ""
+        assert s3[n] != "" and s3[n + 1] != "" and s3[n + 2] != ""
+        assert s3[-1] != ""
 
     def test_panels_carry_card_name_and_orientation(
         self,
         stub_service: _StubReadingService,
     ) -> None:
         snapshots = list(run_reading_generator(stub_service))
-        # The third panel of the final snapshot must mention a card
-        # name (anything non-empty) and an orientation arrow.
-        final_panels = snapshots[-1][:3]
-        for panel in final_panels:
+        n = 3
+        # The final snapshot's text panels must mention a card name
+        # and an orientation arrow.
+        final = snapshots[-1]
+        panel_start = n  # panels start after image slots
+        for i in range(n):
+            panel = final[panel_start + i]
             assert "▲ UPRIGHT" in panel or "▼ REVERSED" in panel
 
     def test_summary_includes_text_from_summary_chain(
@@ -259,23 +273,78 @@ class TestRunReadingGenerator:
     ) -> None:
         snapshots = list(run_reading_generator(stub_service))
         # Stub summary chain returns "SUMMARY#1"
-        assert "SUMMARY#1" in snapshots[-1][3]
+        assert "SUMMARY#1" in snapshots[-1][-1]
 
     def test_each_deal_uses_a_different_card(
         self,
         stub_service: _StubReadingService,
     ) -> None:
         snapshots = list(run_reading_generator(stub_service))
+        n = 3
+        panel_start = n
         # Per-card chain was invoked exactly len(spread.positions) times.
         assert stub_service._per_card_chain.invocations == 3
         # Each of the first three snapshots has a *new* card just added:
-        # snapshot 0 has panel 0 filled, snapshot 1 has panel 1 filled,
-        # snapshot 2 has panel 2 filled. The card names in those
-        # "newly filled" panels must all be different (no duplicates
-        # within a reading).
-        newest_panel_per_snapshot = [s[len([p for p in s[:3] if p]) - 1] for s in snapshots[:3]]
+        newest_panel_per_snapshot = [
+            s[panel_start + len([p for p in s[panel_start : panel_start + n] if p]) - 1]
+            for s in snapshots[:n]
+        ]
         card_names = [p.split("\n")[0] for p in newest_panel_per_snapshot]
         assert len(set(card_names)) == 3
+
+    def test_image_slot_paths_resolved_from_images_dir(
+        self,
+        stub_service: _StubReadingService,
+        tmp_path: Path,
+    ) -> None:
+        """When images_dir is provided and images exist, slots are file paths.
+
+        This is a regression test for Bug 1: main() must pass the
+        deck-scoped subdirectory (e.g. ``images_dir / deck_id``), not the
+        bare ``images_dir``. Here we verify that run_reading_generator
+        correctly resolves images through image_path_for when given the
+        right directory.
+        """
+        deck_dir = tmp_path / "test-deck"
+        deck_dir.mkdir()
+        (deck_dir / "card-00.png").write_bytes(b"fake")
+        (deck_dir / "card-01.png").write_bytes(b"fake")
+        (deck_dir / "card-02.png").write_bytes(b"fake")
+
+        snapshots = list(run_reading_generator(stub_service, images_dir=deck_dir))
+        for snapshot in snapshots:
+            first_image = snapshot[0]
+            if first_image is not None:
+                assert str(deck_dir) in first_image
+
+    def test_image_slots_are_none_when_no_images_dir(
+        self,
+        stub_service: _StubReadingService,
+    ) -> None:
+        snapshots = list(run_reading_generator(stub_service))
+        for snapshot in snapshots:
+            assert snapshot[0] is None
+            assert snapshot[1] is None
+            assert snapshot[2] is None
+
+
+# ---------------------------------------------------------------------------
+# ReadingService.deck_id
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestReadingServiceDeckId:
+    def test_deck_id_exposed_as_property(self) -> None:
+        deck = _make_deck(3)
+        spread = _make_spread(3)
+        svc = ReadingService(
+            deck=deck,
+            spread=spread,
+            per_card_chain=_StubChain(),
+            summary_chain=_StubChain(),
+        )
+        assert svc.deck_id == "test-deck"
 
 
 # ---------------------------------------------------------------------------
@@ -321,8 +390,10 @@ class TestBuildApp:
         stub_service: _StubReadingService,
     ) -> None:
         demo = build_app(stub_service)
-        # The stub spread has 3 positions, so we expect 3 Textbox panels.
+        # The stub spread has 3 positions, so we expect 3 Image + 3 Textbox panels + 1 summary.
+        images = [child for child in demo.blocks.values() if isinstance(child, gr.Image)]
         textboxes = [child for child in demo.blocks.values() if isinstance(child, gr.Textbox)]
+        assert len(images) == 3  # one per position
         assert len(textboxes) == 4  # 3 card panels + 1 summary
 
     def test_summary_box_is_present_and_labeled(
@@ -403,3 +474,91 @@ class TestRagWiringInService:
         assert "position_meaning" in ctx
         # And the returned interp text came from the chain.
         assert "INTERP" in interp.text
+
+
+# ---------------------------------------------------------------------------
+# History tab
+# ---------------------------------------------------------------------------
+
+
+class _StubHistoryStore:
+    """In-memory HistoryStore double for UI tests."""
+
+    def __init__(self) -> None:
+        self.saved: list[Reading] = []
+
+    def save(self, reading: Reading) -> None:
+        self.saved.append(reading)
+
+    def list_recent(self, limit: int = 50) -> list[ReadingListItem]:
+
+        return [
+            ReadingListItem(
+                id=r.id,
+                deck_id=r.deck_id,
+                spread_id=r.spread_id,
+                card_names=[i.card_name for i in r.per_card],
+                summary_preview=r.summary[:120] if len(r.summary) > 120 else r.summary,
+                created_at=r.created_at,
+            )
+            for r in reversed(self.saved[-limit:])
+        ]
+
+    def get(self, reading_id: UUID) -> Reading | None:
+        for r in self.saved:
+            if r.id == reading_id:
+                return r
+        return None
+
+
+@pytest.mark.unit
+class TestBuildAppWithHistory:
+    def test_build_app_with_history_store(self, stub_service: _StubReadingService) -> None:
+        history = _StubHistoryStore()
+        demo = build_app(stub_service, history_store=history)
+        assert isinstance(demo, gr.Blocks)
+        # History tab should contain a Dataframe
+        dataframes = [c for c in demo.blocks.values() if isinstance(c, gr.Dataframe)]
+        assert len(dataframes) >= 1
+
+    def test_build_app_without_history_store(self, stub_service: _StubReadingService) -> None:
+        demo = build_app(stub_service, history_store=None)
+        assert isinstance(demo, gr.Blocks)
+        # Still a valid Blocks app, just without the History tab content
+
+    def test_history_store_backwards_compatible(self, stub_service: _StubReadingService) -> None:
+        """build_app still works without history_store (backward compat)."""
+        demo = build_app(stub_service)
+        assert demo.title == "Fortune Teller"
+
+    def test_format_reading_detail_finds_reading(self) -> None:
+        """_format_reading_detail returns formatted text for a known reading."""
+        history = _StubHistoryStore()
+        reading = Reading(
+            deck_id="test-deck",
+            spread_id="test-spread",
+            dealt=[
+                DealtCard(card_id="the-fool", orientation=Orientation.UPRIGHT, position_index=0)
+            ],
+            per_card=[
+                CardInterpretation(
+                    dealt=DealtCard(
+                        card_id="the-fool", orientation=Orientation.UPRIGHT, position_index=0
+                    ),
+                    card_name="The Fool",
+                    position_name="Past",
+                    text="New beginnings.",
+                ),
+            ],
+            summary="A short summary.",
+        )
+        history.save(reading)
+        result = _format_reading_detail(str(reading.id), history)
+        assert "The Fool" in result
+        assert "A short summary." in result
+
+    def test_format_reading_detail_returns_empty_for_missing(self) -> None:
+        """_format_reading_detail returns empty string for unknown ID."""
+        history = _StubHistoryStore()
+        result = _format_reading_detail(str(uuid.uuid4()), history)
+        assert result == ""

@@ -14,6 +14,7 @@ from __future__ import annotations
 import random
 from dataclasses import dataclass, field
 from typing import Protocol, cast, runtime_checkable
+from uuid import UUID
 
 from fortune_teller.application.chains.per_card import build_per_card_context
 from fortune_teller.application.chains.summary import build_summary_context
@@ -22,6 +23,7 @@ from fortune_teller.application.models.domain import (
     DealtCard,
     Deck,
     Reading,
+    ReadingListItem,
     Spread,
 )
 from fortune_teller.application.services.deck import DeckSession
@@ -47,6 +49,27 @@ class SummaryChain(Protocol):
 
     def invoke(self, inputs: dict[str, str]) -> str:
         """Run the chain synchronously and return the summary text."""
+        ...
+
+
+@runtime_checkable
+class HistoryStore(Protocol):
+    """Persists completed readings and provides history queries.
+
+    Injected so the service and UI have no hard dependency on the SQLite
+    store; tests pass ``None`` or a stub.
+    """
+
+    def save(self, reading: Reading) -> None:
+        """Persist a finalised reading."""
+        ...
+
+    def get(self, reading_id: UUID) -> Reading | None:
+        """Return the full reading by *reading_id*, or ``None``."""
+        ...
+
+    def list_recent(self, limit: int = 50) -> list[ReadingListItem]:
+        """Return recent readings (metadata only), newest first."""
         ...
 
 
@@ -99,7 +122,15 @@ class ReadingService:
         embedder:          Optional :class:`~fortune_teller.application.stores.embeddings.Embedder`
                            used to embed the card query for retrieval.  Must
                            be provided together with *vector_store*.
+        history_store:     Optional :class:`HistoryStore` for persisting
+                           completed readings.  When ``None`` (the default)
+                           finalize is a pure function with no I/O side effects.
     """
+
+    @property
+    def deck_id(self) -> str:
+        """The deck identifier (e.g. ``"book-of-thoth"``)."""
+        return self._deck.id
 
     def __init__(
         self,
@@ -109,6 +140,7 @@ class ReadingService:
         summary_chain: SummaryChain | None = None,
         vector_store: object | None = None,
         embedder: object | None = None,
+        history_store: HistoryStore | None = None,
     ) -> None:
         self._deck = deck
         self._spread = spread
@@ -121,6 +153,7 @@ class ReadingService:
         # duck types.
         self._vector_store = vector_store
         self._embedder = embedder
+        self._history_store = history_store
         if (vector_store is None) != (embedder is None):
             raise ValueError(
                 "vector_store and embedder must be provided together (both or neither)."
@@ -229,13 +262,18 @@ class ReadingService:
             context = build_summary_context(handle.interpretations, handle.spread)
             summary = self._summary_chain.invoke(context)
 
-        return Reading(
+        reading = Reading(
             deck_id=handle.deck_id,
             spread_id=handle.spread.id,
             dealt=list(handle.dealt),
             per_card=list(handle.interpretations),
             summary=summary,
         )
+
+        if self._history_store is not None:
+            self._history_store.save(reading)
+
+        return reading
 
 
 # ---------------------------------------------------------------------------
@@ -248,6 +286,7 @@ def build_reading_service(
     *,
     deck_id: str = "book-of-thoth",
     spread_id: str | None = None,
+    history_store: HistoryStore | None = None,
 ) -> ReadingService:
     """Construct a fully-wired :class:`ReadingService` from app settings.
 
@@ -317,4 +356,5 @@ def build_reading_service(
         summary_chain=summary_chain,
         vector_store=vector_store,
         embedder=embedder,
+        history_store=history_store,
     )

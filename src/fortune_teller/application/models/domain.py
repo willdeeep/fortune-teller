@@ -90,6 +90,7 @@ class Card(BaseModel):
     number: int | None = None  # 0-21 major, 1-14 minor
     sections: list[CardSectionText] = Field(default_factory=list)
     source_url: HttpUrl
+    image_url: str | None = None  # full-res artwork URL, parsed from page
 
     @model_validator(mode="after")
     def _validate_suit_matches_arcana(self) -> Card:
@@ -230,6 +231,29 @@ class Reading(BaseModel):
                 f"A reading cannot contain duplicate cards. Duplicates: {duplicates!r}"
             )
         return self
+
+
+# ---------------------------------------------------------------------------
+# Reading history list item (lightweight row for UI)
+# ---------------------------------------------------------------------------
+
+
+class ReadingListItem(BaseModel):
+    """Lightweight row for the reading-history list UI.
+
+    Does *not* contain the full payload — just enough to render a list
+    row. Retrieve the full :class:`Reading` via
+    :meth:`SQLiteStore.get` when the user selects a row.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    id: uuid.UUID
+    deck_id: str
+    spread_id: str
+    card_names: list[str]
+    summary_preview: str
+    created_at: datetime
 
 
 # ---------------------------------------------------------------------------
