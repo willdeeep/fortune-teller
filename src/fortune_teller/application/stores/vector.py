@@ -278,6 +278,7 @@ class VectorStore:
 
     def search_card_section(
         self,
+        deck_id: str,
         card_id: str,
         query_embedding: Sequence[float],
         k: int = 4,
@@ -285,18 +286,22 @@ class VectorStore:
         """Return top-k card-section chunks for *card_id* by similarity.
 
         Filters to chunks where ``chunk_type = 'card_section'`` AND
-        ``card_id = card_id`` before ranking. Useful for the per-card
-        interpretation chain, which only wants context for the card
-        that was just dealt.
+        ``deck_id = deck_id`` AND ``card_id = card_id`` before ranking.
+        Useful for the per-card interpretation chain, which only wants
+        context for the card that was just dealt.
+
+        Note:
+            *deck_id* is required to prevent cross-deck contamination
+            when multiple decks are stored in the same vector database.
         """
         conn = self._require_conn()
         emb = _embedding_to_duckdb_array(query_embedding, self._dimension)
         sql = (
             f"{self._search_sql()} "
-            "WHERE chunk_type = 'card_section' AND card_id = ? "
+            "WHERE chunk_type = 'card_section' AND deck_id = ? AND card_id = ? "
             "ORDER BY score DESC LIMIT ?"
         )
-        rows = conn.execute(sql, [emb, card_id, k]).fetchall()
+        rows = conn.execute(sql, [emb, deck_id, card_id, k]).fetchall()
         return [_row_to_hit(row) for row in rows]
 
     def search_spread_position(
