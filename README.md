@@ -45,7 +45,7 @@ uv run fortune-teller
 
 ```bash
 # Example: llama-3.2-8b-instruct Q4 quant
-llama-server -m ~/models/llama-3.2-8b-instruct.Q4_K_M.gguf \
+llama-server -hf bartowski/Meta-Llama-3.1-8B-Instruct-GGUF:Q5_K_M \
   --host 127.0.0.1 --port 8080 -ngl 99
 ```
 
