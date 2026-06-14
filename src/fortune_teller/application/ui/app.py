@@ -137,6 +137,17 @@ def _format_reading_detail(reading_id: str, history_store: HistoryStore) -> str:
     return "\n".join(lines)
 
 
+def _selected_reading_id(evt: gr.SelectData) -> str:
+    """Return the reading ID (column 0) of the selected history-Dataframe row.
+
+    Gradio's :class:`gr.SelectData` exposes the full selected row as
+    ``row_value`` (a 1-D list); column 0 holds the reading UUID string.
+    Note there is no ``.row`` attribute — accessing it raises
+    ``AttributeError`` (the cause of the history-detail crash).
+    """
+    return str(evt.row_value[0])
+
+
 def _load_history_list(history_store: HistoryStore) -> list[list[str]]:
     """Return history rows as a list of ``[date, spread, cards, summary]`` strings."""
     items: list[ReadingListItem] = history_store.list_recent()
@@ -341,7 +352,7 @@ def _build_history_tab(history_store: HistoryStore) -> None:
     )
 
     def on_select(evt: gr.SelectData) -> str:
-        return _format_reading_detail(evt.row[0], history_store)
+        return _format_reading_detail(_selected_reading_id(evt), history_store)
 
     history_df.select(
         fn=on_select,

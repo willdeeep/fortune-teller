@@ -48,6 +48,7 @@ from fortune_teller.application.ui.app import (
     _format_card_text,
     _format_position_info,
     _format_reading_detail,
+    _selected_reading_id,
     build_app,
     run_reading_generator,
 )
@@ -713,3 +714,17 @@ class TestBuildAppWithHistory:
         history = _StubHistoryStore()
         result = _format_reading_detail(str(uuid.uuid4()), history)
         assert result == ""
+
+    def test_selected_reading_id_reads_first_column(self) -> None:
+        """The history-row select handler reads the ID from row_value[0].
+
+        Regression for the crash where ``evt.row`` (no such attribute on
+        gradio ``SelectData``) was used instead of ``evt.row_value``.
+        Columns are [ID, Date, Spread, Cards, Summary].
+        """
+        row = ["abc-123", "2026-06-14 12:00", "new-moon-three-card", "The Fool", "..."]
+        evt = gr.SelectData(
+            target=None,
+            data={"index": (0, 0), "value": row[0], "row_value": row},
+        )
+        assert _selected_reading_id(evt) == "abc-123"
