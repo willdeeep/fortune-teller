@@ -89,10 +89,9 @@ uv run mypy src
 | `v0.2.0`       | Reading history persistence (SQLite)                                                                                                                                                                  |
 | `v0.3.0`       | Scrape, store, and serve card images; UI overlay with card artwork                                                                                                                                    |
 | `v0.4.0`       | Interactive detail views — click a card name for a popup with its full structured entry + image + source attribution; hover a position title for a floating definition with a source-attribution link |
-| `v0.5.0`       | Interactive detail views — click a card name for a popup with its full structured entry + image + source attribution; hover a position title for a floating definition with a source-attribution link |
-| `v0.6.0`       | Manual card entry mode                                                                                                                                                                                |
-| `v0.7.0`       | Multiple decks, multiple spreads                                                                                                                                                                      |
-| `v0.8.0`       | User login (local, hashed password)                                                                                                                                                                   |
+| `v0.5.0`       | Manual card entry mode                                                                                                                                                                                |
+| `v0.6.0`       | Multiple decks, multiple spreads                                                                                                                                                                      |
+| `v0.7.0`       | User login (local, hashed password)                                                                                                                                                                   |
 
 ## License
 

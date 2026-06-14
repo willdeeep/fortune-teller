@@ -31,19 +31,83 @@ import gradio as gr
 from fortune_teller.application.stores.images import image_path_for
 
 if TYPE_CHECKING:
-    from fortune_teller.application.models.domain import ReadingListItem
+    from fortune_teller.application.models.domain import Card, ReadingListItem
     from fortune_teller.application.services.reading import HistoryStore, ReadingService
 
 
-def _format_card_text(card_name: str, orientation: str, text: str) -> str:
-    """Render a single card panel as a 3-line block.
+def _format_card_text(
+    card_name: str,
+    orientation: str,
+    text: str,
+    position_name: str | None = None,
+    position_meaning: str | None = None,
+) -> str:
+    """Render a single card panel as a formatted block.
 
     Orientation arrow prefixes the line so it stays visible in the
-    narrow Gradio textbox.
+    narrow Gradio textbox. When *position_name* and *position_meaning*
+    are provided, they are appended as a subtitle.
     """
     arrow = "▼" if orientation == "reversed" else "▲"
     label = "REVERSED" if orientation == "reversed" else "UPRIGHT"
-    return f"{card_name}\n{arrow} {label}\n\n{text}"
+    header = f"{card_name}\n{arrow} {label}"
+    if position_name and position_meaning:
+        header += f"\n*{position_name}: {position_meaning}*"
+    return f"{header}\n\n{text}"
+
+
+def _format_card_detail(
+    card: Card,
+    image_path: str | None = None,
+) -> str:
+    """Render a full card detail view as Markdown.
+
+    Includes the card image (if available), all structured sections,
+    and a source-attribution link. Degrades gracefully when sections
+    or the image are absent.
+    """
+    lines: list[str] = []
+
+    if image_path:
+        lines.append(f"![{card.name}]({image_path})")
+        lines.append("")
+
+    lines.append(f"## {card.name}")
+
+    if card.arcana == "major":
+        lines.append(
+            f"*Major Arcana*{'  ·  ' + str(card.number) if card.number is not None else ''}"
+        )
+    else:
+        suit_label = card.suit.value.title() if card.suit else "Minor Arcana"
+        lines.append(
+            f"*{suit_label}*{'  ·  ' + str(card.number) if card.number is not None else ''}"
+        )
+
+    lines.append("")
+
+    if card.sections:
+        for section in card.sections:
+            section_label = section.section.value.replace("_", " ").title()
+            lines.append(f"**{section_label}:** {section.text}")
+            lines.append("")
+    else:
+        lines.append("*No structured data available for this card.*")
+        lines.append("")
+
+    source_url = str(card.source_url)
+    lines.append(f"[View source ↗]({source_url})")
+
+    return "\n".join(lines)
+
+
+def _format_position_info(
+    position_name: str,
+    position_meaning: str,
+    source_url: str,
+) -> str:
+    """Render position meaning with a source link as a Markdown string."""
+    return f"**{position_name}:** {position_meaning}  \n[Source ↗]({source_url})"
 
 
 def _format_reading_detail(reading_id: str, history_store: HistoryStore) -> str:
@@ -71,6 +135,17 @@ def _format_reading_detail(reading_id: str, history_store: HistoryStore) -> str:
         lines.append("")
     lines.append(f"**Summary:** {reading.summary}")
     return "\n".join(lines)
+
+
+def _selected_reading_id(evt: gr.SelectData) -> str:
+    """Return the reading ID (column 0) of the selected history-Dataframe row.
+
+    Gradio's :class:`gr.SelectData` exposes the full selected row as
+    ``row_value`` (a 1-D list); column 0 holds the reading UUID string.
+    Note there is no ``.row`` attribute — accessing it raises
+    ``AttributeError`` (the cause of the history-detail crash).
+    """
+    return str(evt.row_value[0])
 
 
 def _load_history_list(history_store: HistoryStore) -> list[list[str]]:
@@ -117,12 +192,14 @@ def run_reading_generator(
     images: list[str | None] = [None] * n
     summary = ""
 
-    for i, _pos in enumerate(positions):
+    for i, pos in enumerate(positions):
         interp = reading_service.deal_next(handle)
         panels[i] = _format_card_text(
             card_name=interp.card_name,
             orientation=interp.dealt.orientation.value,
             text=interp.text,
+            position_name=pos.name,
+            position_meaning=pos.meaning,
         )
         if images_dir is not None:
             img_path = image_path_for(interp.dealt.card_id, images_dir)
@@ -153,6 +230,30 @@ def build_app(
     spread = reading_service._spread
     spread_name = spread.name
     positions = spread.positions
+    deck = reading_service._deck
+    cards_by_id: dict[str, Card] = {c.id: c for c in deck.cards}
+
+    def _show_card_detail_for_position(position_index: int, dealt_ids: list[str]) -> str:
+        """Render the detail panel for the card at *position_index*."""
+        if position_index >= len(dealt_ids) or not dealt_ids[position_index]:
+            return "*No card dealt in this position yet. Click 'New Reading' first.*"
+        card_id = dealt_ids[position_index]
+        card = cards_by_id.get(card_id)
+        if card is None:
+            return f"*Card not found: {card_id}*"
+        img_path: str | None = None
+        if images_dir is not None:
+            resolved = image_path_for(card_id, images_dir)
+            img_path = str(resolved) if resolved is not None else None
+        return _format_card_detail(card, image_path=img_path)
+
+    # Default detail text shown before first reading
+    _default_detail = "*Click a detail button to see card information.*"
+
+    # Static position-meaning Markdown (set once at build time)
+    _position_meanings = "  \n".join(
+        _format_position_info(pos.name, pos.meaning, str(pos.source_url)) for pos in positions
+    )
 
     with gr.Blocks(title="Fortune Teller") as demo:
         gr.Markdown(f"# Fortune Teller\n### {spread_name} · Book of Thoth")
@@ -172,11 +273,27 @@ def build_app(
                         gr.Textbox(label=pos.name, lines=8, interactive=False) for pos in positions
                     ]
 
+                # Position info — always visible
+                gr.Markdown(value=_position_meanings)
+
+                # Card detail buttons — one per position
+                with gr.Row():
+                    detail_btns = [
+                        gr.Button(f"📋 {pos.name} detail", size="sm", variant="secondary")
+                        for pos in positions
+                    ]
+
+                # Card detail panel
+                card_detail = gr.Markdown(value=_default_detail)
+
                 summary_box = gr.Textbox(
                     label="Reading Summary",
                     lines=6,
                     interactive=False,
                 )
+
+                # Track dealt card IDs so detail buttons know which card to show
+                dealt_card_ids = gr.State(value=[])
 
                 def run_reading() -> Iterator[tuple[str | None, ...]]:
                     """Gradio click handler — forwards to :func:`run_reading_generator`."""
@@ -187,6 +304,14 @@ def build_app(
                     inputs=[],
                     outputs=[*card_images, *card_panels, summary_box],
                 )
+
+                # Wire each detail button to show that position's dealt card
+                for i, btn in enumerate(detail_btns):
+                    btn.click(
+                        fn=lambda dealt_ids, idx=i: _show_card_detail_for_position(idx, dealt_ids),
+                        inputs=[dealt_card_ids],
+                        outputs=[card_detail],
+                    )
 
             with gr.Tab("History"):
                 if history_store is not None:
@@ -227,7 +352,7 @@ def _build_history_tab(history_store: HistoryStore) -> None:
     )
 
     def on_select(evt: gr.SelectData) -> str:
-        return _format_reading_detail(evt.row[0], history_store)
+        return _format_reading_detail(_selected_reading_id(evt), history_store)
 
     history_df.select(
         fn=on_select,
