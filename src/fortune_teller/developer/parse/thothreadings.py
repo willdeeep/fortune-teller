@@ -154,6 +154,35 @@ _SLUG_PREFIX_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Site-chrome image substrings to exclude from card image selection.
+_CHROME_DENYLIST = ("astrologist-illustration", "Screen-Shot", "logo", "branding")
+
+# Regex to strip WordPress size suffixes like -480x749 from image URLs.
+_SIZE_SUFFIX_RE = re.compile(r"-\d+x\d+(?=\.\w+$)", re.IGNORECASE)
+
+
+def _extract_image_url(content: Node) -> str | None:
+    """Extract the card artwork URL from the entry-content node.
+
+    Heuristic:
+    1. Collect ``<img>`` nodes whose ``src`` is under ``/wp-content/uploads/``.
+    2. Exclude known site-chrome by filename denylist.
+    3. Strip ``-WxH`` size suffixes from ``src`` to get the full-resolution URL.
+    4. Return the first remaining candidate, or ``None`` if no match.
+    """
+    candidates: list[str] = []
+    for img in content.css("img"):
+        src = (img.attributes.get("src") or "").strip()
+        if not src or "/wp-content/uploads/" not in src:
+            continue
+        filename = src.rsplit("/", 1)[-1].lower()
+        if any(deny in filename for deny in _CHROME_DENYLIST):
+            continue
+        full_url = _SIZE_SUFFIX_RE.sub("", src)
+        candidates.append(full_url)
+    return candidates[0] if candidates else None
+
+
 # Pattern to match spread position headings
 _POSITION_RE = re.compile(r"Card\s+(\d+)\s*[-\u2013]\s*(.+)", re.IGNORECASE)
 
@@ -315,6 +344,8 @@ def parse_card_page(html: str, slug: str) -> Card:
     if overall and CardSection.OVERALL not in seen_sections:
         sections.insert(0, CardSectionText(section=CardSection.OVERALL, text=overall))
 
+    image_url = _extract_image_url(content)
+
     return Card(
         id=slug,
         name=_slug_to_name(slug),
@@ -323,6 +354,7 @@ def parse_card_page(html: str, slug: str) -> Card:
         number=number,
         sections=sections,
         source_url=source_url,
+        image_url=image_url,
     )
 
 

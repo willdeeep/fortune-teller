@@ -22,10 +22,13 @@ from __future__ import annotations
 
 import atexit
 from collections.abc import Iterator
+from pathlib import Path
 from typing import TYPE_CHECKING, cast
 from uuid import UUID
 
 import gradio as gr
+
+from fortune_teller.application.stores.images import image_path_for
 
 if TYPE_CHECKING:
     from fortune_teller.application.models.domain import ReadingListItem
@@ -83,7 +86,8 @@ def _load_history_list(history_store: HistoryStore) -> list[list[str]]:
 
 def run_reading_generator(
     reading_service: ReadingService,
-) -> Iterator[tuple[str, ...]]:
+    images_dir: Path | None = None,
+) -> Iterator[tuple[str | None, ...]]:
     """Run one full reading, yielding a UI snapshot after each card.
 
     The Gradio ``.click()`` handler in :func:`build_app` consumes this
@@ -91,14 +95,26 @@ def run_reading_generator(
     immediately. Exposed as a free function (not a closure) so tests
     can drive it without instantiating a Gradio Blocks widget.
 
+    Args:
+        reading_service: The service that orchestrates readings.
+        images_dir: Optional directory containing card artwork.  When
+            provided, each dealt card's image path is resolved via
+            :func:`~fortune_teller.application.stores.images.image_path_for`
+            and included in the yield.
+
     Yields:
-        Tuples of ``(panel_0, panel_1, …, panel_N, summary)`` strings.
-        The summary slot is empty until all cards have been dealt,
-        then receives the finalised :attr:`Reading.summary` string.
+        Tuples of ``(img_0, …, img_N, panel_0, …, panel_N, summary)``.
+        Image slots are ``None`` when the card has not yet been dealt or
+        when no image file exists.  Text panel slots are ``""`` until
+        the corresponding card is dealt.  The summary slot is ``""``
+        until all cards have been interpreted, then receives the
+        finalised :attr:`Reading.summary` string.
     """
     handle = reading_service.start()
     positions = reading_service._spread.positions
-    panels = [""] * len(positions)
+    n = len(positions)
+    panels: list[str] = [""] * n
+    images: list[str | None] = [None] * n
     summary = ""
 
     for i, _pos in enumerate(positions):
@@ -108,16 +124,19 @@ def run_reading_generator(
             orientation=interp.dealt.orientation.value,
             text=interp.text,
         )
-        yield (*panels, summary)
+        if images_dir is not None:
+            img_path = image_path_for(interp.dealt.card_id, images_dir)
+            images[i] = str(img_path) if img_path is not None else None
+        yield (*images, *panels, summary)
 
     reading = reading_service.finalize(handle)
-    summary = reading.summary
-    yield (*panels, summary)
+    yield (*images, *panels, reading.summary)
 
 
 def build_app(
     reading_service: ReadingService,
     history_store: HistoryStore | None = None,
+    images_dir: Path | None = None,
 ) -> gr.Blocks:
     """Build the Gradio Blocks app bound to *reading_service*.
 
@@ -127,6 +146,9 @@ def build_app(
 
     *history_store* is optional; when provided the app includes a
     History tab for browsing past readings.
+
+    *images_dir* is optional; when provided, card artwork is resolved
+    from this directory and displayed above each panel.
     """
     spread = reading_service._spread
     spread_name = spread.name
@@ -140,6 +162,12 @@ def build_app(
                 new_reading_btn = gr.Button("New Reading", variant="primary")
 
                 with gr.Row():
+                    card_images = [
+                        gr.Image(label=pos.name, show_label=True, height=200, interactive=False)
+                        for pos in positions
+                    ]
+
+                with gr.Row():
                     card_panels = [
                         gr.Textbox(label=pos.name, lines=8, interactive=False) for pos in positions
                     ]
@@ -150,14 +178,14 @@ def build_app(
                     interactive=False,
                 )
 
-                def run_reading() -> Iterator[tuple[str, ...]]:
+                def run_reading() -> Iterator[tuple[str | None, ...]]:
                     """Gradio click handler — forwards to :func:`run_reading_generator`."""
-                    yield from run_reading_generator(reading_service)
+                    yield from run_reading_generator(reading_service, images_dir=images_dir)
 
                 new_reading_btn.click(
                     fn=run_reading,
                     inputs=[],
-                    outputs=[*card_panels, summary_box],
+                    outputs=[*card_images, *card_panels, summary_box],
                 )
 
             with gr.Tab("History"):
@@ -223,8 +251,17 @@ def main() -> None:
     atexit.register(history_store.close)
 
     service = build_reading_service(settings, history_store=history_store)
-    demo = build_app(service, history_store=history_store)
-    demo.launch(server_name="127.0.0.1", server_port=7860)
+    deck_images_dir = settings.images_dir / service.deck_id
+    demo = build_app(
+        service,
+        history_store=history_store,
+        images_dir=deck_images_dir,
+    )
+    demo.launch(
+        server_name="127.0.0.1",
+        server_port=7860,
+        allowed_paths=[str(deck_images_dir)],
+    )
 
 
 if __name__ == "__main__":

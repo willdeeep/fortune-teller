@@ -56,6 +56,17 @@ def the_fool_html() -> str:
 
 
 @pytest.fixture
+def ace_of_wands_html() -> str:
+    """Raw HTML for Ace of Wands from thothreadings.com (committed fixture)."""
+    path = HTML_DIR / "ace-of-wands.html"
+    if not path.exists():
+        pytest.skip(
+            "Fixture not yet committed: tests/fixtures/html/thothreadings/ace-of-wands.html"
+        )
+    return path.read_text(encoding="utf-8")
+
+
+@pytest.fixture
 def new_moon_spread_html() -> str:
     """Raw HTML for the New Moon spread page (committed fixture)."""
     path = HTML_DIR / "spread-new-moon.html"
