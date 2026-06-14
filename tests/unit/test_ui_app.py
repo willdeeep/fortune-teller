@@ -39,11 +39,14 @@ from fortune_teller.application.models.domain import (
     ReadingListItem,
     Spread,
     SpreadPosition,
+    Suit,
 )
 from fortune_teller.application.services.reading import ReadingHandle, ReadingService
 from fortune_teller.application.stores.vector import VectorStore
 from fortune_teller.application.ui.app import (
+    _format_card_detail,
     _format_card_text,
+    _format_position_info,
     _format_reading_detail,
     build_app,
     run_reading_generator,
@@ -209,6 +212,131 @@ class TestFormatCardText:
         for orientation in ("upright", "reversed"):
             out = _format_card_text("Card", orientation, "x")
             assert orientation.upper() in out
+
+    def test_position_meaning_included_when_provided(self) -> None:
+        out = _format_card_text("The Fool", "upright", "text", "Past", "What was set in motion")
+        assert "*Past: What was set in motion*" in out
+
+    def test_position_meaning_omitted_when_none(self) -> None:
+        out = _format_card_text("The Fool", "upright", "text")
+        assert "*" not in out
+
+
+# ---------------------------------------------------------------------------
+# _format_card_detail
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestFormatCardDetail:
+    def test_renders_card_name_and_arcana(self) -> None:
+        card = Card(
+            id="0-the-fool",
+            name="The Fool",
+            arcana=Arcana.MAJOR,
+            source_url=HttpUrl("https://example.test/the-fool"),
+        )
+        result = _format_card_detail(card)
+        assert "## The Fool" in result
+        assert "*Major Arcana*" in result
+
+    def test_renders_minor_arcana_with_suit(self) -> None:
+        card = Card(
+            id="ace-of-wands",
+            name="Ace of Wands",
+            arcana=Arcana.MINOR,
+            suit=Suit.WANDS,
+            source_url=HttpUrl("https://example.test/ace-of-wands"),
+        )
+        result = _format_card_detail(card)
+        assert "## Ace of Wands" in result
+        assert "*Wands*" in result
+
+    def test_renders_sections(self) -> None:
+        card = Card(
+            id="0-the-fool",
+            name="The Fool",
+            arcana=Arcana.MAJOR,
+            sections=[
+                CardSectionText(section=CardSection.DRIVE, text="Pure potential."),
+                CardSectionText(section=CardSection.LIGHT, text="Spontaneity."),
+            ],
+            source_url=HttpUrl("https://example.test/the-fool"),
+        )
+        result = _format_card_detail(card)
+        assert "**Drive:** Pure potential." in result
+        assert "**Light:** Spontaneity." in result
+
+    def test_shows_fallback_when_no_sections(self) -> None:
+        card = Card(
+            id="0-the-fool",
+            name="The Fool",
+            arcana=Arcana.MAJOR,
+            source_url=HttpUrl("https://example.test/the-fool"),
+        )
+        result = _format_card_detail(card)
+        assert "No structured data" in result
+
+    def test_includes_source_link(self) -> None:
+        card = Card(
+            id="0-the-fool",
+            name="The Fool",
+            arcana=Arcana.MAJOR,
+            source_url=HttpUrl("https://example.test/the-fool"),
+        )
+        result = _format_card_detail(card)
+        assert "[View source" in result
+        assert "https://example.test/the-fool" in result
+
+    def test_includes_image_when_provided(self) -> None:
+        card = Card(
+            id="0-the-fool",
+            name="The Fool",
+            arcana=Arcana.MAJOR,
+            source_url=HttpUrl("https://example.test/the-fool"),
+        )
+        result = _format_card_detail(card, image_path="/data/images/the-fool.jpeg")
+        assert "![The Fool]" in result
+        assert "/data/images/the-fool.jpeg" in result
+
+    def test_omits_image_when_none(self) -> None:
+        card = Card(
+            id="0-the-fool",
+            name="The Fool",
+            arcana=Arcana.MAJOR,
+            source_url=HttpUrl("https://example.test/the-fool"),
+        )
+        result = _format_card_detail(card, image_path=None)
+        assert "![" not in result
+
+    def test_includes_number_for_major_arcana(self) -> None:
+        card = Card(
+            id="0-the-fool",
+            name="The Fool",
+            arcana=Arcana.MAJOR,
+            number=0,
+            source_url=HttpUrl("https://example.test/the-fool"),
+        )
+        result = _format_card_detail(card)
+        assert "·  0" in result
+
+
+# ---------------------------------------------------------------------------
+# _format_position_info
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestFormatPositionInfo:
+    def test_renders_name_and_meaning(self) -> None:
+        result = _format_position_info(
+            "Past", "What was set in motion.", "https://example.test/spread"
+        )
+        assert "**Past:** What was set in motion." in result
+
+    def test_includes_source_link(self) -> None:
+        result = _format_position_info("Present", "Current energy.", "https://example.test/spread")
+        assert "[Source ↗](https://example.test/spread)" in result
 
 
 # ---------------------------------------------------------------------------
@@ -410,6 +538,29 @@ class TestBuildApp:
         demo = build_app(stub_service)
         buttons = [c for c in demo.blocks.values() if isinstance(c, gr.Button)]
         assert any(b.value == "New Reading" for b in buttons)
+
+    def test_app_has_detail_buttons(self, stub_service: _StubReadingService) -> None:
+        demo = build_app(stub_service)
+        # 3 position detail buttons + 1 "New Reading" button + 1 Refresh (in History)
+        detail_btns = [
+            c
+            for c in demo.blocks.values()
+            if isinstance(c, gr.Button) and c.value is not None and "detail" in str(c.value)
+        ]
+        assert len(detail_btns) == 3
+
+    def test_app_has_card_detail_panel(self, stub_service: _StubReadingService) -> None:
+        demo = build_app(stub_service)
+        markdowns = [c for c in demo.blocks.values() if isinstance(c, gr.Markdown)]
+        # At least: header markdown, position meanings markdown, card detail markdown
+        assert len(markdowns) >= 3
+
+    def test_app_has_position_info(self, stub_service: _StubReadingService) -> None:
+        demo = build_app(stub_service)
+        markdowns = [c for c in demo.blocks.values() if isinstance(c, gr.Markdown)]
+        # One of the markdowns should contain position meaning text
+        all_text = " ".join(str(m.value) for m in markdowns if m.value)
+        assert "Position" in all_text
 
 
 # ---------------------------------------------------------------------------
