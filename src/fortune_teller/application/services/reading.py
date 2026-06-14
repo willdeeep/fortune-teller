@@ -127,6 +127,11 @@ class ReadingService:
                            finalize is a pure function with no I/O side effects.
     """
 
+    @property
+    def deck_id(self) -> str:
+        """The deck identifier (e.g. ``"book-of-thoth"``)."""
+        return self._deck.id
+
     def __init__(
         self,
         deck: Deck,

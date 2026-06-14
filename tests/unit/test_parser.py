@@ -175,6 +175,11 @@ class TestParseTheFool:
         reloaded = Card.model_validate_json(self.card.model_dump_json())
         assert reloaded.id == self.card.id
 
+    def test_image_url_is_populated(self) -> None:
+        """End-to-end: parse_card_page populates Card.image_url."""
+        assert self.card.image_url is not None
+        assert "wp-content/uploads" in str(self.card.image_url)
+
     def test_matches_golden_json(self) -> None:
         golden = _golden("book-of-thoth", "0-the-fool.json")
         assert golden["id"] == self.card.id

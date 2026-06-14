@@ -35,6 +35,7 @@ ft-parse         = "fortune_teller.developer.parse.cli:app"
 ft-embed         = "fortune_teller.developer.embed.cli:app"
 ft-build-index   = "fortune_teller.developer.build_index.cli:app"
 ft-fetch-models  = "fortune_teller.developer.fetch_models.cli:main"
+ft-fetch-images  = "fortune_teller.developer.fetch_images.cli:app"
 
 [dependency-groups]
 test = [

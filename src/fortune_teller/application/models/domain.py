@@ -90,6 +90,7 @@ class Card(BaseModel):
     number: int | None = None  # 0-21 major, 1-14 minor
     sections: list[CardSectionText] = Field(default_factory=list)
     source_url: HttpUrl
+    image_url: str | None = None  # full-res artwork URL, parsed from page
 
     @model_validator(mode="after")
     def _validate_suit_matches_arcana(self) -> Card:
