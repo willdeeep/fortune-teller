@@ -222,6 +222,7 @@ class ReadingService:
                 position=position,
                 vector_store=self._vector_store,  # type: ignore[arg-type]
                 embedder=self._embedder,  # type: ignore[arg-type]
+                deck_id=self._deck.id,
             )
         else:
             inputs = {

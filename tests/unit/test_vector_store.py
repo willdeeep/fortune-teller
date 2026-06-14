@@ -252,7 +252,7 @@ class TestVectorStoreSearchCardSection:
                     ),
                 ]
             )
-            hits = store.search_card_section("the-fool", [1.0, 0.0, 0.0, 0.0], k=4)
+            hits = store.search_card_section("book-of-thoth", "the-fool", [1.0, 0.0, 0.0, 0.0], k=4)
             assert len(hits) == 1
             assert hits[0].chunk.card_id == "the-fool"
             assert hits[0].chunk.text == "fool-drive"
@@ -280,7 +280,7 @@ class TestVectorStoreSearchCardSection:
                     ),
                 ]
             )
-            hits = store.search_card_section("the-fool", [0.0, 1.0, 0.0, 0.0], k=4)
+            hits = store.search_card_section("book-of-thoth", "the-fool", [0.0, 1.0, 0.0, 0.0], k=4)
             assert len(hits) == 1
             assert hits[0].chunk.text == "card text"
 
@@ -288,7 +288,9 @@ class TestVectorStoreSearchCardSection:
         store = VectorStore(":memory:", dimension=DIM)
         with store:
             store.add_chunks([_make_chunk(card_id="the-fool", text="x")])
-            hits = store.search_card_section("the-magician", [0.0, 0.0, 0.0, 1.0], k=4)
+            hits = store.search_card_section(
+                "book-of-thoth", "the-magician", [0.0, 0.0, 0.0, 1.0], k=4
+            )
             assert hits == []
 
 
