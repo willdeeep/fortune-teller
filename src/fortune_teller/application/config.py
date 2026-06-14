@@ -20,6 +20,9 @@ class Settings(BaseSettings):
     ft_data_dir: Path = Path("./data")
     sqlite_path: Path = Path("./data/sqlite/fortune.db")
     images_dir: Path = Path("./data/images")
+    normalize_provider: str = "api"  # "api" for Claude, "local" for llama-server
+    normalize_model: str = "claude-sonnet-4-6"
+    anthropic_api_key: str = ""  # set via env var ANTHROPIC_API_KEY
 
     model_config = {  # pydantic v2 style
         "env_file": ".env",
