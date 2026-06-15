@@ -33,12 +33,13 @@ class Arcana(StrEnum):
 
 
 class Suit(StrEnum):
-    """The four suits of the minor arcana."""
+    """The four suits of the minor arcana. Thoth uses Disks; Rider-Waite uses Pentacles."""
 
     WANDS = "wands"
     CUPS = "cups"
     SWORDS = "swords"
     DISKS = "disks"
+    PENTACLES = "pentacles"
 
 
 class CardSection(StrEnum):
