@@ -111,6 +111,22 @@ class TestEmbedCliCards:
         assert (out_deck / "0-the-fool.json").exists()
         assert (out_deck / "i-the-magician.json").exists()
 
+    def test_meta_json_is_skipped(self, isolated_data_dir: Settings) -> None:
+        """A deck's ``meta.json`` is metadata, not a card — embed must skip it."""
+        deck_dir = isolated_data_dir.ft_data_dir / "parsed" / "rider-waite"
+        _write_card(deck_dir, "the-fool")
+        (deck_dir / "meta.json").write_text(
+            json.dumps({"id": "rider-waite", "name": "Rider-Waite-Smith"}), encoding="utf-8"
+        )
+
+        result = runner.invoke(app, [])
+        assert result.exit_code == 0, result.output
+        assert "ERROR" not in result.output
+
+        out_deck = isolated_data_dir.ft_data_dir / "embedded" / "rider-waite"
+        assert (out_deck / "the-fool.json").exists()
+        assert not (out_deck / "meta.json").exists()
+
     def test_output_chunks_have_embeddings(self, isolated_data_dir: Settings) -> None:
         deck_dir = isolated_data_dir.ft_data_dir / "parsed" / "book-of-thoth"
         _write_card(deck_dir, "0-the-fool")

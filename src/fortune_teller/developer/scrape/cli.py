@@ -2,10 +2,11 @@
 
 Usage::
 
-    uv run ft-scrape                       # scrape all Book of Thoth slugs
-    uv run ft-scrape --refresh             # force re-fetch, ignoring cache
-    uv run ft-scrape --dry-run             # list slugs without fetching
-    uv run ft-scrape --source learntarot   # scrape Rider-Waite from learntarot.com
+    uv run ft-scrape                         # scrape ALL sources (Thoth + Rider-Waite)
+    uv run ft-scrape --source thothreadings  # just the Book of Thoth
+    uv run ft-scrape --source learntarot     # just the Rider-Waite deck
+    uv run ft-scrape --refresh               # force re-fetch, ignoring cache
+    uv run ft-scrape --dry-run               # list slugs without fetching
 
 Cached HTML is written to ``<FT_DATA_DIR>/cache/<source>.com/``.
 """
@@ -38,25 +39,21 @@ _SOURCE_CONFIG: dict[str, tuple[str, str, str]] = {
     ),
 }
 
-_DEFAULT_SOURCE = "thothreadings"
+#: ``--source`` default. ``"all"`` scrapes every configured source.
+_DEFAULT_SOURCE = "all"
 
 
-@app.command()
-def main(
-    refresh: bool = typer.Option(False, "--refresh", help="Force re-fetch cached pages."),
-    dry_run: bool = typer.Option(False, "--dry-run", help="List slugs without fetching."),
-    seeds: Path | None = typer.Option(None, "--seeds", help="Path to slugs seed file."),  # noqa: B008
-    source: str = typer.Option(_DEFAULT_SOURCE, "--source", help="Scraping source."),
+def _scrape_source(
+    source: str,
+    *,
+    refresh: bool,
+    dry_run: bool,
+    seeds: Path | None,
 ) -> None:
-    """Scrape card pages from the specified source."""
-    source_cfg = _SOURCE_CONFIG.get(source)
-    if source_cfg is None:
-        console.print(f"[red]Unknown source: {source!r}. Choose from: {list(_SOURCE_CONFIG)}[/red]")
-        raise typer.Exit(1)
+    """Scrape a single configured *source* (a key of :data:`_SOURCE_CONFIG`)."""
+    cache_name, seeds_name, module_path = _SOURCE_CONFIG[source]
 
-    cache_name, seeds_name, module_path = source_cfg
-
-    # Lazy import to keep CLI fast
+    # Lazy import to keep CLI start-up fast.
     if module_path == "fortune_teller.developer.scrape.thothreadings":  # pragma: no cover
         from fortune_teller.developer.scrape.thothreadings import load_slugs, scrape_slugs  # noqa: PLC0415, I001
     else:
@@ -66,7 +63,7 @@ def main(
     seeds_file = seeds or (_SEEDS_DIR / seeds_name)
 
     slugs = load_slugs(seeds_file)
-    console.print(f"[bold]Loaded {len(slugs)} slugs from {seeds_file.name}[/bold]")
+    console.print(f"[bold]{source} — loaded {len(slugs)} slugs from {seeds_file.name}[/bold]")
 
     if dry_run:
         for slug in slugs:
@@ -74,7 +71,38 @@ def main(
         return
 
     cache_dir.mkdir(parents=True, exist_ok=True)
-    console.print(f"Cache dir: {cache_dir}")
+    console.print(f"  Cache dir: {cache_dir}")
 
     results = asyncio.run(scrape_slugs(slugs, cache_dir, refresh=refresh))
-    console.print(f"[green]Scraped {len(results)} pages.[/green]")
+    console.print(f"[green]{source} — scraped {len(results)} pages.[/green]")
+
+
+@app.command()
+def main(
+    refresh: bool = typer.Option(False, "--refresh", help="Force re-fetch cached pages."),
+    dry_run: bool = typer.Option(False, "--dry-run", help="List slugs without fetching."),
+    seeds: Path | None = typer.Option(  # noqa: B008
+        None, "--seeds", help="Seed file override (requires a single --source)."
+    ),
+    source: str = typer.Option(
+        _DEFAULT_SOURCE,
+        "--source",
+        help="Source: 'all' (default), 'thothreadings', or 'learntarot'.",
+    ),
+) -> None:
+    """Scrape card pages. With no ``--source`` it scrapes every configured source."""
+    if source == "all":
+        if seeds is not None:
+            console.print("[red]--seeds requires a single --source (not 'all').[/red]")
+            raise typer.Exit(1)
+        for src in _SOURCE_CONFIG:
+            _scrape_source(src, refresh=refresh, dry_run=dry_run, seeds=None)
+        return
+
+    if source not in _SOURCE_CONFIG:
+        console.print(
+            f"[red]Unknown source: {source!r}. Choose from: {['all', *_SOURCE_CONFIG]}[/red]"
+        )
+        raise typer.Exit(1)
+
+    _scrape_source(source, refresh=refresh, dry_run=dry_run, seeds=seeds)

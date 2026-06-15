@@ -51,6 +51,9 @@ def _process_deck(
     """Embed every card JSON in *deck_dir*. Returns (card_count, error_count)."""
     card_count = errors = 0
     for card_path in sorted(deck_dir.glob("*.json")):
+        # ``meta.json`` is per-deck metadata, not a card — skip it.
+        if card_path.name == "meta.json":
+            continue
         try:
             card = Card.model_validate_json(card_path.read_text(encoding="utf-8"))
             chunks = chunks_from_card(card, deck_id=deck_dir.name)

@@ -20,6 +20,7 @@ Each stage records provenance for every emitted section.
 from __future__ import annotations
 
 import json
+import re
 import typing
 from enum import StrEnum
 from pathlib import Path
@@ -104,6 +105,44 @@ def build_normalize_model(
 
 
 # ---------------------------------------------------------------------------
+# LLM response parsing
+# ---------------------------------------------------------------------------
+
+_JSON_FENCE_RE = re.compile(r"```(?:json)?\s*(.*?)```", re.DOTALL | re.IGNORECASE)
+
+
+def _parse_json_object(content: str) -> dict[str, str]:
+    """Parse a JSON object from an LLM response.
+
+    Models often wrap JSON in a Markdown code fence or add a sentence of
+    preamble despite being told "JSON only". Unwrap a fence if present;
+    otherwise slice from the first ``{`` to the last ``}``; then parse.
+
+    Raises:
+        ValueError: if no JSON object can be parsed (message includes a
+            snippet of the offending response for debugging).
+    """
+    text = content.strip()
+    fence = _JSON_FENCE_RE.search(text)
+    if fence:
+        text = fence.group(1).strip()
+    elif not text.startswith("{"):
+        start, end = text.find("{"), text.rfind("}")
+        if start != -1 and end > start:
+            text = text[start : end + 1]
+
+    try:
+        parsed = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise ValueError(
+            f"LLM did not return valid JSON ({exc}). Response began: {content[:200]!r}"
+        ) from exc
+    if not isinstance(parsed, dict):
+        raise ValueError(f"Expected a JSON object from the LLM, got {type(parsed).__name__}.")
+    return typing.cast(dict[str, str], parsed)
+
+
+# ---------------------------------------------------------------------------
 # Re-bucket stage
 # ---------------------------------------------------------------------------
 
@@ -133,7 +172,7 @@ def _rebucket(raw_card: RawCard, llm: Runnable[Any, Any]) -> dict[str, str]:
     raw_content = response.content if isinstance(response, AIMessage) else str(response)
     content = raw_content if isinstance(raw_content, str) else str(raw_content)
 
-    return typing.cast(dict[str, str], json.loads(content))
+    return _parse_json_object(content)
 
 
 # ---------------------------------------------------------------------------
@@ -179,7 +218,7 @@ def _gapfill(
     raw_content = response.content if isinstance(response, AIMessage) else str(response)
     content = raw_content if isinstance(raw_content, str) else str(raw_content)
 
-    return typing.cast(dict[str, str], json.loads(content))
+    return _parse_json_object(content)
 
 
 # ---------------------------------------------------------------------------
@@ -263,6 +302,7 @@ def normalize_card(
         number=raw_card.number,
         sections=card_sections,
         source_url=HttpUrl(raw_card.source_url),
+        image_url=raw_card.image_url,
     )
 
     return card, CardProvenance(card_id=raw_card.id, sections=dict(provenance))
@@ -372,6 +412,8 @@ def normalize_deck(
     raw_files = sorted(raw_dir.glob("*.json"))
     results: list[tuple[Card, CardProvenance]] = []
 
+    failed: list[tuple[str, str]] = []
+
     for raw_path in raw_files:
         raw_data = json.loads(raw_path.read_text(encoding="utf-8"))
         raw_card = RawCard.model_validate(raw_data)
@@ -379,7 +421,14 @@ def normalize_deck(
         if only is not None and raw_card.id not in only:
             continue
 
-        card, prov = normalize_card(raw_card, llm=llm)
+        # One bad LLM response shouldn't sink the whole 78-card batch — record
+        # the failure and carry on so the rest still get written.
+        try:
+            card, prov = normalize_card(raw_card, llm=llm)
+        except Exception as exc:  # batch tool must be resilient: skip one bad card
+            failed.append((raw_card.id, str(exc)))
+            print(f"  ERROR normalising {raw_card.id}: {exc}")
+            continue
         results.append((card, prov))
 
         # Write Card JSON
@@ -389,6 +438,10 @@ def normalize_deck(
         # Write provenance sidecar
         prov_path = provenance_dir / f"{raw_card.id}.json"
         prov_path.write_text(prov.model_dump_json(indent=2), encoding="utf-8")
+
+    if failed:
+        ids = ",".join(cid for cid, _ in failed)
+        print(f"\n{len(failed)} card(s) failed; re-run with: ft-normalize-rw --only {ids}")
 
     # Write deck metadata
     meta = {
