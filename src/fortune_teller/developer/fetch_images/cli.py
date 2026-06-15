@@ -2,9 +2,10 @@
 
 Usage::
 
-    uv run ft-fetch-images               # download missing card images
+    uv run ft-fetch-images               # download images for ALL parsed decks
+    uv run ft-fetch-images --deck book-of-thoth  # just one deck
     uv run ft-fetch-images --refresh      # re-download all images
-    uv run ft-fetch-images --dry-run      # list cards + resolved image URLs
+    uv run ft-fetch-images --dry-run       # list cards + resolved image URLs
 
 Images are stored in ``<FT_DATA_DIR>/images/<deck_id>/<card_id>.<ext>``.
 Cards with ``image_url is None`` are skipped and reported.
@@ -22,7 +23,7 @@ from rich.console import Console
 
 from fortune_teller.application.config import settings
 from fortune_teller.application.models.domain import Card
-from fortune_teller.application.services.loading import load_deck
+from fortune_teller.application.services.loading import list_decks, load_deck
 
 app = typer.Typer(add_completion=False)
 console = Console()
@@ -95,13 +96,14 @@ async def _download_images(
     )
 
 
-@app.command()
-def main(
-    refresh: bool = typer.Option(False, "--refresh", help="Re-download all images."),
-    dry_run: bool = typer.Option(False, "--dry-run", help="List cards + URLs without downloading."),
-    deck_id: str = typer.Option("book-of-thoth", "--deck", help="Deck ID to fetch images for."),
-) -> None:
-    """Download card artwork images from the source site."""
+def _fetch_deck_images(deck_id: str, *, refresh: bool, dry_run: bool) -> None:
+    """Download card images for a single deck.
+
+    Args:
+        deck_id: Deck identifier (subdirectory name under ``parsed/``).
+        refresh: Re-download all images even if cached.
+        dry_run: Print resolved URLs without downloading.
+    """
     parsed_dir = settings.ft_data_dir / "parsed"
     deck = load_deck(parsed_dir, deck_id)
     images_dir = settings.images_dir / deck_id
@@ -110,3 +112,25 @@ def main(
     console.print(f"  Images dir: {images_dir}")
 
     asyncio.run(_download_images(deck.cards, images_dir, refresh=refresh, dry_run=dry_run))
+
+
+@app.command()
+def main(
+    refresh: bool = typer.Option(False, "--refresh", help="Re-download all images."),
+    dry_run: bool = typer.Option(False, "--dry-run", help="List cards + URLs without downloading."),
+    deck_id: str = typer.Option(
+        "all",
+        "--deck",
+        help="Deck ID to fetch images for, or 'all' for every parsed deck.",
+    ),
+) -> None:
+    """Download card artwork images from the source site."""
+    if deck_id == "all":
+        parsed_dir = settings.ft_data_dir / "parsed"
+        decks = list_decks(parsed_dir)
+        for i, (did, _) in enumerate(decks):
+            if i > 0:
+                console.print()
+            _fetch_deck_images(did, refresh=refresh, dry_run=dry_run)
+    else:
+        _fetch_deck_images(deck_id, refresh=refresh, dry_run=dry_run)

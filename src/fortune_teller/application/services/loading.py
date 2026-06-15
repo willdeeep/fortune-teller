@@ -22,8 +22,23 @@ functions are called.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Annotated
+
+from pydantic import BaseModel, ConfigDict, Field
 
 from fortune_teller.application.models.domain import Card, Deck, Spread
+
+
+class _DeckMeta(BaseModel):
+    """Internal model for deck ``meta.json`` files."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: str | None = None
+    name: Annotated[str, Field(min_length=1)]
+    source_url: str | None = None
+    attribution: str | None = None
+    description: str | None = None
 
 
 def load_deck(parsed_dir: Path, deck_id: str) -> Deck:
@@ -47,11 +62,26 @@ def load_deck(parsed_dir: Path, deck_id: str) -> Deck:
     if not deck_dir.is_dir():
         raise FileNotFoundError(f"Deck directory not found: {deck_dir}")
 
-    card_paths = sorted(deck_dir.glob("*.json"))
+    card_paths = sorted(p for p in deck_dir.glob("*.json") if p.name != "meta.json")
     if not card_paths:
         raise ValueError(f"No card JSON files in {deck_dir}")
 
     cards = [Card.model_validate_json(p.read_text(encoding="utf-8")) for p in card_paths]
+
+    meta_path = deck_dir / "meta.json"
+    if meta_path.is_file():
+        meta = _DeckMeta.model_validate_json(meta_path.read_text(encoding="utf-8"))
+        if meta.id is not None and meta.id != deck_id:
+            raise ValueError(f"meta.json id {meta.id!r} does not match deck_id {deck_id!r}")
+        return Deck(
+            id=deck_id,
+            name=meta.name,
+            cards=cards,
+            source_url=meta.source_url,
+            attribution=meta.attribution,
+            description=meta.description,
+        )
+
     return Deck(id=deck_id, name=deck_id.replace("-", " ").title(), cards=cards)
 
 
@@ -92,6 +122,30 @@ def load_first_spread(parsed_dir: Path) -> Spread:
     return Spread.model_validate_json(paths[0].read_text(encoding="utf-8"))
 
 
+def list_decks(parsed_dir: Path) -> list[tuple[str, str]]:
+    """Return ``(id, name)`` tuples for every deck under *parsed_dir*.
+
+    Iterates immediate subdirectories of *parsed_dir* (excluding ``spreads/``)
+    and reads ``meta.json`` if present to obtain the display name; otherwise
+    derives the name from the directory name.
+
+    Returns:
+        Sorted list of ``(deck_id, display_name)`` tuples.
+    """
+    decks: list[tuple[str, str]] = []
+    for entry in sorted(parsed_dir.iterdir()):
+        if not entry.is_dir() or entry.name == "spreads":
+            continue
+        deck_id = entry.name
+        meta_path = entry / "meta.json"
+        if meta_path.is_file():
+            meta = _DeckMeta.model_validate_json(meta_path.read_text(encoding="utf-8"))
+            decks.append((deck_id, meta.name))
+        else:
+            decks.append((deck_id, deck_id.replace("-", " ").title()))
+    return decks
+
+
 def list_spread_ids(parsed_dir: Path) -> list[str]:
     """Return the slugs of every spread JSON under ``parsed_dir / spreads/``.
 
@@ -104,6 +158,7 @@ def list_spread_ids(parsed_dir: Path) -> list[str]:
 
 
 __all__ = [
+    "list_decks",
     "list_spread_ids",
     "load_deck",
     "load_first_spread",

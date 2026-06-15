@@ -217,10 +217,11 @@ class TestPromptContextBuildersMatchTemplates:
         # And the builder's signature should match (smoke test, not exhaustive)
         sig = inspect.signature(build_per_card_context)
         # 6 required positional args (dealt, card, spread, position, vector_store, embedder)
+        # + 1 required keyword-only arg (deck_id)
         required_params = [
             p for p in sig.parameters.values() if p.default is inspect.Parameter.empty
         ]
-        assert len(required_params) == 6
+        assert len(required_params) == 7
 
     def test_summary_context_keys_match_prompt_placeholders(self) -> None:
         """``build_summary_context`` keys are exactly what ``summary_prompt`` needs."""

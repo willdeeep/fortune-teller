@@ -252,6 +252,7 @@ class TestBuildPerCardContext:
                 position=sample_position,
                 vector_store=store,
                 embedder=embedder,
+                deck_id="book-of-thoth",
             )
         assert set(ctx.keys()) == {
             "card_name",
@@ -282,6 +283,7 @@ class TestBuildPerCardContext:
                 position=sample_position,
                 vector_store=store,
                 embedder=embedder,
+                deck_id="book-of-thoth",
             )
         assert ctx["orientation"] == "reversed"
 
@@ -302,6 +304,7 @@ class TestBuildPerCardContext:
                 position=sample_position,
                 vector_store=store,
                 embedder=embedder,
+                deck_id="book-of-thoth",
             )
         assert ctx["retrieved_card_sections"] == "(none retrieved)"
         assert ctx["retrieved_position_text"] == "(none retrieved)"
@@ -338,6 +341,7 @@ class TestBuildPerCardContext:
                 vector_store=store,
                 embedder=embedder,
                 k=2,
+                deck_id="book-of-thoth",
             )
         assert "Pure potential" in ctx["retrieved_card_sections"]
         assert "Spontaneity" in ctx["retrieved_card_sections"]
@@ -368,6 +372,7 @@ class TestBuildPerCardContext:
                 position=sample_position,
                 vector_store=store,
                 embedder=embedder,
+                deck_id="book-of-thoth",
             )
         assert "set in motion" in ctx["retrieved_position_text"]
 
@@ -397,6 +402,7 @@ class TestBuildPerCardContext:
                 position=present_position,
                 vector_store=store,
                 embedder=embedder,
+                deck_id="book-of-thoth",
             )
         assert "Present energy" in ctx["retrieved_position_text"]
 
@@ -425,6 +431,7 @@ class TestBuildPerCardContext:
                 position=sample_position,
                 vector_store=store,
                 embedder=spy,  # type: ignore[arg-type]
+                deck_id="book-of-thoth",
             )
         assert captured == ["The Fool reversed"]
         # And the dict is still well-formed.

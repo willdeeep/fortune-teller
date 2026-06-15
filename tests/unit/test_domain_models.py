@@ -525,11 +525,11 @@ class TestChunk:
 
 @pytest.mark.unit
 class TestSuitEnum:
-    def test_four_suits(self) -> None:
-        assert len(Suit) == 4
+    def test_five_suits(self) -> None:
+        assert len(Suit) == 5
 
     def test_expected_values(self) -> None:
-        assert {s.value for s in Suit} == {"wands", "cups", "swords", "disks"}
+        assert {s.value for s in Suit} == {"wands", "cups", "swords", "disks", "pentacles"}
 
     def test_round_trips(self) -> None:
         for suit in Suit:

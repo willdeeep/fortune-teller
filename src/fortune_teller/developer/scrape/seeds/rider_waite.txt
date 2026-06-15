@@ -1,0 +1,92 @@
+# Rider-Waite — learntarot.com slugs
+# Cards are at https://www.learntarot.com/<slug>.htm
+# Lines starting with # are ignored. Blank lines are ignored.
+# Source: https://www.learntarot.com/
+
+# Major Arcana (22 cards)
+maj00
+maj01
+maj02
+maj03
+maj04
+maj05
+maj06
+maj07
+maj08
+maj09
+maj10
+maj11
+maj12
+maj13
+maj14
+maj15
+maj16
+maj17
+maj18
+maj19
+maj20
+maj21
+
+# Wands (14 cards)
+wa
+w2
+w3
+w4
+w5
+w6
+w7
+w8
+w9
+w10
+wpg
+wkn
+wqn
+wkg
+
+# Cups (14 cards)
+ca
+c2
+c3
+c4
+c5
+c6
+c7
+c8
+c9
+c10
+cpg
+ckn
+cqn
+ckg
+
+# Swords (14 cards)
+sa
+s2
+s3
+s4
+s5
+s6
+s7
+s8
+s9
+s10
+spg
+skn
+sqn
+skg
+
+# Pentacles (14 cards)
+pa
+p2
+p3
+p4
+p5
+p6
+p7
+p8
+p9
+p10
+ppg
+pkn
+pqn
+pkg

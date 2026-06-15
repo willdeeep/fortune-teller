@@ -1,6 +1,6 @@
 [project]
 name = "fortune-teller"
-version = "0.4.0"
+version = "0.5.0"
 description = "Local-first Tarot reading app — RAG over scraped definitions"
 readme = "README.md"
 license = { text = "MIT" }
@@ -26,6 +26,7 @@ dev = [
     "tenacity>=9.0",
     "rich>=13.7",
     "typer>=0.12",
+    "langchain-anthropic>=0.3",
 ]
 
 [project.scripts]
@@ -36,6 +37,7 @@ ft-embed         = "fortune_teller.developer.embed.cli:app"
 ft-build-index   = "fortune_teller.developer.build_index.cli:app"
 ft-fetch-models  = "fortune_teller.developer.fetch_models.cli:main"
 ft-fetch-images  = "fortune_teller.developer.fetch_images.cli:app"
+ft-normalize-rw  = "fortune_teller.developer.normalize.cli:app"
 
 [dependency-groups]
 test = [
@@ -86,6 +88,7 @@ module = [
     "sentence_transformers.*",
     "duckdb.*",
     "selectolax.*",
+    "langchain_anthropic.*",
     "gradio.*",
     "langchain.*",
     "langchain_core.*",

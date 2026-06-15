@@ -126,6 +126,7 @@ class TestVectorStorePersistence:
         # Reopen and search
         with VectorStore(str(db_path), dimension=_DIM) as store:
             hits = store.search_card_section(
+                deck_id="book-of-thoth",
                 card_id="the-fool",
                 query_embedding=_unit_vector(0),
                 k=2,
@@ -140,6 +141,7 @@ class TestVectorStorePersistence:
         db_path = tmp_path / "empty.duckdb"
         with VectorStore(str(db_path), dimension=_DIM) as store:
             hits = store.search_card_section(
+                deck_id="book-of-thoth",
                 card_id="the-fool",
                 query_embedding=_unit_vector(0),
                 k=5,
@@ -149,6 +151,7 @@ class TestVectorStorePersistence:
         # Reopen — still empty
         with VectorStore(str(db_path), dimension=_DIM) as store:
             hits = store.search_card_section(
+                deck_id="book-of-thoth",
                 card_id="the-fool",
                 query_embedding=_unit_vector(0),
                 k=5,
@@ -183,6 +186,7 @@ class TestCardSectionSearchRanking:
             store.add_chunks(chunks)
             # Query for seed=7 → that chunk should be top
             hits = store.search_card_section(
+                deck_id="book-of-thoth",
                 card_id="the-fool",
                 query_embedding=_unit_vector(7),
                 k=5,
@@ -214,6 +218,7 @@ class TestCardSectionSearchRanking:
         with VectorStore(str(db_path), dimension=_DIM) as store:
             store.add_chunks(chunks)
             hits = store.search_card_section(
+                deck_id="book-of-thoth",
                 card_id="the-fool",
                 query_embedding=_unit_vector(0),
                 k=10,
@@ -331,6 +336,7 @@ class TestVectorStoreRoundTrip:
         with VectorStore(str(db_path), dimension=_DIM) as store:
             # Find all of the-fool's sections
             fool_hits = store.search_card_section(
+                deck_id="book-of-thoth",
                 card_id="the-fool",
                 query_embedding=_unit_vector(0),  # matches DRIVE
                 k=5,

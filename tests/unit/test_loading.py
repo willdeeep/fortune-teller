@@ -14,6 +14,7 @@ from pydantic import HttpUrl
 
 from fortune_teller.application.models.domain import Card, Deck, Spread
 from fortune_teller.application.services.loading import (
+    list_decks,
     list_spread_ids,
     load_deck,
     load_first_spread,
@@ -200,3 +201,142 @@ class TestListSpreadIds:
     def test_returns_empty_when_dir_is_empty(self, tmp_path: Path) -> None:
         (tmp_path / "parsed" / "spreads").mkdir(parents=True)
         assert list_spread_ids(tmp_path / "parsed") == []
+
+
+# ---------------------------------------------------------------------------
+# load_deck with meta.json
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestLoadDeckWithMeta:
+    """``load_deck`` behaviour when ``meta.json`` is present or absent."""
+
+    def _deck_dir(self, tmp_path: Path, deck_id: str = "book-of-thoth") -> Path:
+        parsed = tmp_path / "parsed"
+        parsed.mkdir()
+        deck_dir = parsed / deck_id
+        deck_dir.mkdir()
+        # Write a minimal card so the deck isn't empty.
+        (deck_dir / "0-the-fool.json").write_text(
+            Card(
+                id="the-fool",
+                name="The Fool",
+                arcana="major",
+                source_url=HttpUrl("https://example.test/card"),
+            ).model_dump_json(indent=2),
+            encoding="utf-8",
+        )
+        return parsed
+
+    def test_loads_meta_json(self, tmp_path: Path) -> None:
+        """``meta.json`` fields are propagated to the returned ``Deck``."""
+        parsed = self._deck_dir(tmp_path)
+        meta = {
+            "id": "book-of-thoth",
+            "name": "Book of Thoth",
+            "source_url": "https://example.com/book-of-thoth",
+            "attribution": "Aleister Crowley",
+            "description": "A Thoth deck.",
+        }
+        (parsed / "book-of-thoth" / "meta.json").write_text(
+            __import__("json").dumps(meta), encoding="utf-8"
+        )
+        deck = load_deck(parsed, "book-of-thoth")
+        assert deck.name == "Book of Thoth"
+        assert deck.source_url == "https://example.com/book-of-thoth"
+        assert deck.attribution == "Aleister Crowley"
+        assert deck.description == "A Thoth deck."
+
+    def test_meta_id_matches_deck_id(self, tmp_path: Path) -> None:
+        """When ``meta.id`` matches ``deck_id``, the deck loads successfully."""
+        parsed = self._deck_dir(tmp_path)
+        (parsed / "book-of-thoth" / "meta.json").write_text(
+            __import__("json").dumps({"id": "book-of-thoth", "name": "Book of Thoth"}),
+            encoding="utf-8",
+        )
+        deck = load_deck(parsed, "book-of-thoth")
+        assert deck.name == "Book of Thoth"
+
+    def test_meta_id_mismatch_raises(self, tmp_path: Path) -> None:
+        """``meta.id`` that differs from ``deck_id`` raises ``ValueError``."""
+        parsed = self._deck_dir(tmp_path)
+        (parsed / "book-of-thoth" / "meta.json").write_text(
+            __import__("json").dumps({"id": "wrong-deck", "name": "Wrong Deck"}),
+            encoding="utf-8",
+        )
+        with pytest.raises(ValueError, match="does not match"):
+            load_deck(parsed, "book-of-thoth")
+
+    def test_missing_meta_falls_back(self, tmp_path: Path) -> None:
+        """Without ``meta.json``, the deck name is derived from the directory name."""
+        parsed = self._deck_dir(tmp_path)
+        deck = load_deck(parsed, "book-of-thoth")
+        assert deck.name == "Book Of Thoth"
+        assert deck.source_url is None
+        assert deck.attribution is None
+        assert deck.description is None
+
+
+# ---------------------------------------------------------------------------
+# list_decks
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestListDecks:
+    """``list_decks`` enumerates deck directories."""
+
+    def _parsed_with_decks(
+        self,
+        tmp_path: Path,
+        deck_ids: list[str] | None = None,
+    ) -> Path:
+        parsed = tmp_path / "parsed"
+        parsed.mkdir()
+        for deck_id in deck_ids or ["book-of-thoth"]:
+            deck_dir = parsed / deck_id
+            deck_dir.mkdir()
+            (deck_dir / "0-card.json").write_text(
+                Card(
+                    id="card",
+                    name="Card",
+                    arcana="major",
+                    source_url=HttpUrl("https://example.test/card"),
+                ).model_dump_json(indent=2),
+                encoding="utf-8",
+            )
+        return parsed
+
+    def test_returns_deck_ids_and_names(self, tmp_path: Path) -> None:
+        """Returns sorted ``(id, name)`` pairs when decks have ``meta.json``."""
+        parsed = self._parsed_with_decks(tmp_path, ["rider-waite", "book-of-thoth"])
+        for deck_id in ("book-of-thoth", "rider-waite"):
+            (parsed / deck_id / "meta.json").write_text(
+                __import__("json").dumps(
+                    {"id": deck_id, "name": deck_id.replace("-", " ").title()}
+                ),
+                encoding="utf-8",
+            )
+        assert list_decks(parsed) == [
+            ("book-of-thoth", "Book Of Thoth"),
+            ("rider-waite", "Rider Waite"),
+        ]
+
+    def test_excludes_spreads_dir(self, tmp_path: Path) -> None:
+        """The ``spreads/`` directory is not included in the result."""
+        parsed = self._parsed_with_decks(tmp_path, ["book-of-thoth"])
+        (parsed / "spreads").mkdir()
+        (parsed / "spreads" / "dummy.json").write_text("{}", encoding="utf-8")
+        assert list_decks(parsed) == [("book-of-thoth", "Book Of Thoth")]
+
+    def test_derives_name_from_dir_when_no_meta(self, tmp_path: Path) -> None:
+        """Without ``meta.json``, the name is derived from the directory name."""
+        parsed = self._parsed_with_decks(tmp_path, ["book-of-thoth"])
+        assert list_decks(parsed) == [("book-of-thoth", "Book Of Thoth")]
+
+    def test_returns_empty_when_no_decks(self, tmp_path: Path) -> None:
+        """A parsed directory with no deck subdirectories returns ``[]``."""
+        parsed = tmp_path / "parsed"
+        parsed.mkdir()
+        assert list_decks(parsed) == []
