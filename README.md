@@ -28,19 +28,25 @@ uv sync --extra dev --group test --group lint
 # 2. Install git hooks
 uv run pre-commit install
 
-# 3. One-time data pipeline (scrape → parse → normalise → embed → index)
+# 3. Anthropic API key — ONLY needed for the ft-normalize-rw step below.
+#    Create a .env in the repo root containing just this one line:
+echo 'ANTHROPIC_API_KEY=sk-ant-...' > .env
+#    (.env is gitignored. Skip this if you don't need to (re)build the
+#     Rider-Waite deck — everything else runs fully offline.)
+
+# 4. One-time data pipeline (scrape → parse → normalise → embed → index)
 uv run ft-fetch-models      # download embedding model for offline use
 uv run ft-scrape            # scrape all decks (Book of Thoth + Rider-Waite)
 uv run ft-parse             # parse all decks → card JSON (Thoth) / raw JSON (RW)
 uv run ft-normalize-rw      # Rider-Waite backfill: RawCard → Card via the Anthropic API
-                            #   • requires ANTHROPIC_API_KEY in .env (see Configuration)
+                            #   • uses ANTHROPIC_API_KEY from .env (step 3)
                             #   • review data/parsed/rider-waite/_normalization_report.md
                             #   • --no-llm for a free deterministic dry run
 uv run ft-embed             # embed all decks
 uv run ft-build-index       # build the DuckDB vector index (all decks)
 uv run ft-fetch-images      # download card artwork for all parsed decks into data/images/
 
-# 4. Start the app
+# 5. Start the app
 uv run fortune-teller
 # → opens http://127.0.0.1:7860
 ```
