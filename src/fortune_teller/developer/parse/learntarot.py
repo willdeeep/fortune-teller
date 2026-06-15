@@ -26,9 +26,10 @@ learntarot-internal abbreviation (e.g. ``maj00``, ``c7``, ``wpg``).
 from __future__ import annotations
 
 import re
+from urllib.parse import urljoin
 
 from pydantic import BaseModel, ConfigDict
-from selectolax.parser import HTMLParser
+from selectolax.parser import HTMLParser, Node
 
 from fortune_teller.application.models.domain import Arcana, Suit
 
@@ -189,6 +190,7 @@ class RawCard(BaseModel):
     reinforcing_names: list[str]
     description: str
     source_url: str
+    image_url: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -234,6 +236,40 @@ def _extract_actions(raw: str) -> list[str]:
             if stripped_part:
                 actions.append(stripped_part)
     return actions if actions else [raw.strip()] if raw.strip() else []
+
+
+def _extract_image_url(body: Node, base_url: str) -> str | None:
+    """Extract the full-resolution image URL from a learntarot.com card page.
+
+    First tries to find an ``<a>`` tag whose ``href`` points to a ``bigjpgs/``
+    path (the full-resolution image).  Falls back to the first ``<img>`` tag
+    whose ``src`` does not match known site-chrome patterns (``rbowline.gif``,
+    ``rbowline.jpg``, or any filename starting with ``rbowline``).
+
+    Args:
+        body: The selectolax ``<body>`` node of the parsed page.
+        base_url: Base URL for resolving relative links.
+
+    Returns:
+        The absolute image URL, or ``None`` if no suitable image found.
+    """
+    # 1. Look for <a href="bigjpgs/..."> — the full-resolution link
+    for link in body.css("a"):
+        href = link.attributes.get("href")
+        if href and re.search(r"bigjpgs/.+\.(?:jpg|jpeg|gif|png|webp)$", href, re.IGNORECASE):
+            return str(urljoin(base_url, href))
+
+    # 2. Fallback: first <img> whose src is not site chrome
+    for img in body.css("img"):
+        src = img.attributes.get("src")
+        if not src:
+            continue
+        filename = src.rsplit("/", 1)[-1].lower()
+        if filename in ("rbowline.gif", "rbowline.jpg") or re.match(r"rbowline", filename):
+            continue
+        return str(urljoin(base_url, src))
+
+    return None
 
 
 def parse_card_page(html: str, slug: str) -> RawCard:
@@ -316,6 +352,7 @@ def parse_card_page(html: str, slug: str) -> RawCard:
     description = _extract_section_text(sections, "DESCRIPTION")
 
     source_url = f"{_RW_BASE_URL}/{slug}.htm"
+    image_url = _extract_image_url(body, _RW_BASE_URL)
 
     return RawCard(
         id=card_id,
@@ -329,4 +366,5 @@ def parse_card_page(html: str, slug: str) -> RawCard:
         reinforcing_names=reinforcing_names,
         description=description,
         source_url=source_url,
+        image_url=image_url,
     )

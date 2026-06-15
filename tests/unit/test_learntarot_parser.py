@@ -11,9 +11,14 @@ headings anchored by ``<a name="...">`` (``ACTIONS``, ``OPPOSING CARDS: ...``,
 from __future__ import annotations
 
 import pytest
+from selectolax.parser import HTMLParser
 
 from fortune_teller.application.models.domain import Arcana, Suit
-from fortune_teller.developer.parse.learntarot import parse_card_page
+from fortune_teller.developer.parse.learntarot import (
+    _RW_BASE_URL,
+    _extract_image_url,
+    parse_card_page,
+)
 
 # ---------------------------------------------------------------------------
 # Inline HTML fixtures (structurally faithful to learntarot.com)
@@ -27,6 +32,7 @@ _MAJ00_HTML = """\
 <li><b>Spontaneity</b>
 <li><b>Faith</b>
 </ul>
+<A HREF="bigjpgs/maj00.jpg"><IMG SRC="maj00s.gif" ALT="The Fool"></A>
 <img src="rbowline.gif">
 <a href="#actions"><b>[ Actions ]</b></a>
 <a href="#opposite"><b>[ Opposing Cards ]</b></a>
@@ -61,6 +67,7 @@ _C7_HTML = """\
 <li><b>Options</b>
 <li><b>Dissipation</b>
 </ul>
+<A HREF="bigjpgs/cups07.jpg"><IMG SRC="c7s.gif" ALT="Seven of Cups"></A>
 <img src="rbowline.gif">
 <a href="#actions"><b>[ Actions ]</b></a>
 <a href="#description"><b>[ Description ]</b></a>
@@ -92,6 +99,7 @@ _WPG_HTML = """\
 <li><b>Be Creative</b>
 <li><b>Be Enthusiastic</b>
 </ul>
+<A HREF="bigjpgs/wpg.jpg"><IMG SRC="wpgs.gif" ALT="Page of Wands"></A>
 <img src="rbowline.gif">
 <a href="#actions"><b>[ Actions ]</b></a>
 <a href="#description"><b>[ Description ]</b></a>
@@ -150,6 +158,9 @@ class TestParseMajorArcana:
     def test_source_url_correct(self) -> None:
         assert self.card.source_url == "https://www.learntarot.com/maj00.htm"
 
+    def test_image_url(self) -> None:
+        assert self.card.image_url == "https://www.learntarot.com/bigjpgs/maj00.jpg"
+
 
 # ---------------------------------------------------------------------------
 # Seven of Cups — minor pip card
@@ -189,6 +200,9 @@ class TestParsePipCard:
     def test_source_url_correct(self) -> None:
         assert self.card.source_url == "https://www.learntarot.com/c7.htm"
 
+    def test_image_url(self) -> None:
+        assert self.card.image_url == "https://www.learntarot.com/bigjpgs/cups07.jpg"
+
 
 # ---------------------------------------------------------------------------
 # Page of Wands — court card (no opposing/reinforcing sections)
@@ -226,6 +240,9 @@ class TestParseCourtCard:
 
     def test_source_url_correct(self) -> None:
         assert self.card.source_url == "https://www.learntarot.com/wpg.htm"
+
+    def test_image_url(self) -> None:
+        assert self.card.image_url == "https://www.learntarot.com/bigjpgs/wpg.jpg"
 
 
 # ---------------------------------------------------------------------------
@@ -266,3 +283,64 @@ class TestParseCardErrors:
     def test_empty_html_raises_error(self) -> None:
         with pytest.raises(ValueError):
             parse_card_page("", "maj00")
+
+
+# ---------------------------------------------------------------------------
+# _extract_image_url unit tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestExtractImageUrl:
+    """Tests for the _extract_image_url helper function."""
+
+    def test_bigjpgs_link_preferred(self) -> None:
+        """bigjpgs <a> link is preferred over <img> fallback."""
+        html = """<html><body>
+        <A HREF="bigjpgs/maj00.jpg"><IMG SRC="maj00s.gif" ALT="The Fool"></A>
+        <img src="rbowline.gif">
+        </body></html>"""
+        body = HTMLParser(html).body
+        assert body is not None
+        result = _extract_image_url(body, _RW_BASE_URL)
+        assert result == "https://www.learntarot.com/bigjpgs/maj00.jpg"
+
+    def test_fallback_to_img_without_bigjpgs(self) -> None:
+        """Without a bigjpgs link, the first non-chrome <img> src is used."""
+        html = """<html><body>
+        <img src="maj00s.gif" ALT="The Fool">
+        <img src="rbowline.gif">
+        </body></html>"""
+        body = HTMLParser(html).body
+        assert body is not None
+        result = _extract_image_url(body, _RW_BASE_URL)
+        assert result == "https://www.learntarot.com/maj00s.gif"
+
+    def test_chrome_images_skipped(self) -> None:
+        """Only chrome images (rbowline*) yield None."""
+        html = """<html><body>
+        <img src="rbowline.gif">
+        <img src="rbowline.jpg">
+        </body></html>"""
+        body = HTMLParser(html).body
+        assert body is not None
+        result = _extract_image_url(body, _RW_BASE_URL)
+        assert result is None
+
+    def test_no_images_yields_none(self) -> None:
+        """No <a> or <img> tags at all yields None."""
+        html = "<html><body><p>No images here.</p></body></html>"
+        body = HTMLParser(html).body
+        assert body is not None
+        result = _extract_image_url(body, _RW_BASE_URL)
+        assert result is None
+
+    def test_relative_url_resolved(self) -> None:
+        """Relative bigjpgs href is resolved against the base URL."""
+        html = """<html><body>
+        <A HREF="bigjpgs/cups07.jpg"><IMG SRC="c7s.gif" ALT="Seven of Cups"></A>
+        </body></html>"""
+        body = HTMLParser(html).body
+        assert body is not None
+        result = _extract_image_url(body, _RW_BASE_URL)
+        assert result == "https://www.learntarot.com/bigjpgs/cups07.jpg"

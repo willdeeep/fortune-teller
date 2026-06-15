@@ -87,6 +87,7 @@ def _make_raw_card(
     keywords: list[str] | None = None,
     actions: list[str] | None = None,
     description: str = "A young man stands at the edge of a cliff.",
+    image_url: str | None = None,
 ) -> RawCard:
     return RawCard(
         id=card_id,
@@ -99,6 +100,7 @@ def _make_raw_card(
         opposing_names=[],
         reinforcing_names=[],
         description=description,
+        image_url=image_url,
         source_url=f"https://www.learntarot.com/{card_id}.htm",
     )
 
@@ -108,6 +110,7 @@ def _make_raw_minor_card(
     name: str = "Ace of Wands",
     suit: Suit = Suit.WANDS,
     number: int = 1,
+    image_url: str | None = None,
 ) -> RawCard:
     return RawCard(
         id=card_id,
@@ -120,6 +123,7 @@ def _make_raw_minor_card(
         opposing_names=[],
         reinforcing_names=[],
         description="A hand holds a flowering staff.",
+        image_url=image_url,
         source_url=f"https://www.learntarot.com/{card_id}.htm",
     )
 
@@ -170,6 +174,42 @@ class TestDeterministicStage:
         card2, prov2 = normalize_card(raw, llm=None)
         assert card1.model_dump_json() == card2.model_dump_json()
         assert prov1.model_dump_json() == prov2.model_dump_json()
+
+
+# ---------------------------------------------------------------------------
+# Image URL carry-through
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestImageUrlCarryThrough:
+    """``image_url`` on ``RawCard`` must be preserved on the output ``Card``."""
+
+    def test_image_url_carried_to_card(self) -> None:
+        raw = _make_raw_card(image_url="https://example.com/big.jpg")
+        card, _ = normalize_card(raw, llm=None)
+        assert card.image_url == "https://example.com/big.jpg"
+
+    def test_image_url_none_stays_none(self) -> None:
+        raw = _make_raw_card()
+        assert raw.image_url is None
+        card, _ = normalize_card(raw, llm=None)
+        assert card.image_url is None
+
+    def test_image_url_preserved_with_llm(self) -> None:
+        raw = _make_raw_card(image_url="https://example.com/art.jpg")
+        llm = _StubLLM(
+            json.dumps(
+                {
+                    "light": "Bright opportunities ahead.",
+                    "shadow": "Risk of naivety and overconfidence.",
+                    "advice": "Trust your instincts but stay aware.",
+                    "reversed": "Fear of the unknown holds you back.",
+                }
+            )
+        )
+        card, _ = normalize_card(raw, llm=llm)
+        assert card.image_url == "https://example.com/art.jpg"
 
 
 # ---------------------------------------------------------------------------

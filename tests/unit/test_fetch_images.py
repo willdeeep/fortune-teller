@@ -14,15 +14,19 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 from typing import Any
-from unittest.mock import patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
 from pydantic import HttpUrl
+from typer.testing import CliRunner
 
 from fortune_teller.application.models.domain import Card
+from fortune_teller.application.services.loading import (
+    list_decks,  # noqa: F401 — used in monkeypatch string paths
+)
 from fortune_teller.application.stores.images import image_path_for
-from fortune_teller.developer.fetch_images.cli import _download_images, _resolve_ext
+from fortune_teller.developer.fetch_images.cli import _download_images, _resolve_ext, app
 
 # ---------------------------------------------------------------------------
 # _resolve_ext
@@ -278,3 +282,87 @@ class TestImagePathForDeckScoped:
 
         result = image_path_for("0-the-fool", tmp_path)
         assert result is None
+
+
+# ---------------------------------------------------------------------------
+# CLI integration (--deck default "all" behavior)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestFetchImagesCli:
+    """CLI invocation tests for the ``--deck`` flag and ``all`` default."""
+
+    def test_default_deck_is_all(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Invoke with no args — defaults to ``--deck all``, iterates ``list_decks``.
+
+        When ``list_decks`` returns an empty list the command should exit
+        cleanly without attempting to fetch any deck images.
+        """
+        list_decks_mock = MagicMock(return_value=[])
+        fetch_mock = MagicMock()
+        monkeypatch.setattr("fortune_teller.developer.fetch_images.cli.list_decks", list_decks_mock)
+        monkeypatch.setattr(
+            "fortune_teller.developer.fetch_images.cli._fetch_deck_images", fetch_mock
+        )
+
+        runner = CliRunner()
+        result = runner.invoke(app, [])
+
+        assert result.exit_code == 0
+        list_decks_mock.assert_called_once()
+        fetch_mock.assert_not_called()
+
+    def test_single_deck_flag(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """``--deck <id>`` processes only that one deck via ``load_deck`` + ``_download_images``."""
+        mock_deck = MagicMock(spec=["name", "cards"])
+        mock_deck.name = "Book of Thoth"
+        mock_deck.cards = []
+        load_deck_mock = MagicMock(return_value=mock_deck)
+        download_mock = AsyncMock()
+        monkeypatch.setattr("fortune_teller.developer.fetch_images.cli.load_deck", load_deck_mock)
+        monkeypatch.setattr(
+            "fortune_teller.developer.fetch_images.cli._download_images", download_mock
+        )
+
+        runner = CliRunner()
+        result = runner.invoke(app, ["--deck", "book-of-thoth"])
+
+        assert result.exit_code == 0
+        load_deck_mock.assert_called_once()
+        args, _ = load_deck_mock.call_args
+        assert args[1] == "book-of-thoth"
+        download_mock.assert_called_once()
+
+    def test_all_decks_iterates_multiple(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """With no args and multiple parsed decks, ``_fetch_deck_images`` is called for each."""
+        decks = [
+            ("book-of-thoth", "Book of Thoth"),
+            ("rider-waite", "Rider-Waite-Smith"),
+        ]
+        list_decks_mock = MagicMock(return_value=decks)
+        fetch_mock = MagicMock()
+        monkeypatch.setattr("fortune_teller.developer.fetch_images.cli.list_decks", list_decks_mock)
+        monkeypatch.setattr(
+            "fortune_teller.developer.fetch_images.cli._fetch_deck_images", fetch_mock
+        )
+
+        runner = CliRunner()
+        result = runner.invoke(app, [])
+
+        assert result.exit_code == 0
+        assert fetch_mock.call_count == 2
+        fetch_mock.assert_any_call("book-of-thoth", refresh=False, dry_run=False)
+        fetch_mock.assert_any_call("rider-waite", refresh=False, dry_run=False)
+
+    def test_all_decks_with_no_parsed_dirs(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """With no args and zero parsed decks, exits cleanly (exit code 0)."""
+        monkeypatch.setattr(
+            "fortune_teller.developer.fetch_images.cli.list_decks",
+            MagicMock(return_value=[]),
+        )
+
+        runner = CliRunner()
+        result = runner.invoke(app, [])
+
+        assert result.exit_code == 0

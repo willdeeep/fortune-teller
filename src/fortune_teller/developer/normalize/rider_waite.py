@@ -302,6 +302,7 @@ def normalize_card(
         number=raw_card.number,
         sections=card_sections,
         source_url=HttpUrl(raw_card.source_url),
+        image_url=raw_card.image_url,
     )
 
     return card, CardProvenance(card_id=raw_card.id, sections=dict(provenance))

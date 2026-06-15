@@ -38,7 +38,7 @@ uv run ft-normalize-rw      # Rider-Waite backfill: RawCard → Card via the Ant
                             #   • --no-llm for a free deterministic dry run
 uv run ft-embed             # embed all decks
 uv run ft-build-index       # build the DuckDB vector index (all decks)
-uv run ft-fetch-images      # download Book of Thoth artwork into data/images/ (local only)
+uv run ft-fetch-images      # download card artwork for all parsed decks into data/images/
 
 # 4. Start the app
 uv run fortune-teller
@@ -60,19 +60,19 @@ and do **not** require a server.
 
 Override any setting with an environment variable or `.env` file:
 
-| Variable               | Default                           | Description                                      |
-| ---------------------- | --------------------------------- | ------------------------------------------------ |
-| `OPENAI_BASE_URL`      | `http://127.0.0.1:8080/v1`        | llama.cpp server                                 |
-| `OPENAI_API_KEY`       | `sk-no-key`                       | Any non-empty string                             |
-| `CHAT_MODEL`           | `local-model`                     | Model name as reported by server                 |
-| `FT_DATA_DIR`          | `./data`                          | Path to data directory                           |
-| `SQLITE_PATH`          | `./data/sqlite/fortune.db`        | Path to SQLite reading-history database          |
-| `IMAGES_DIR`           | `./data/images`                   | Directory for card artwork images                |
-| `EMBEDDING_MODEL`      | `BAAI/bge-small-en-v1.5`          | HuggingFace embedding model (name or local path) |
-| `EMBEDDING_MODEL_PATH` | `./data/models/bge-small-en-v1.5` | Local path for offline embedding model           |
-| `ANTHROPIC_API_KEY`    | _(unset)_                         | Anthropic key — required by `ft-normalize-rw`    |
+| Variable               | Default                           | Description                                          |
+| ---------------------- | --------------------------------- | ---------------------------------------------------- |
+| `OPENAI_BASE_URL`      | `http://127.0.0.1:8080/v1`        | llama.cpp server                                     |
+| `OPENAI_API_KEY`       | `sk-no-key`                       | Any non-empty string                                 |
+| `CHAT_MODEL`           | `local-model`                     | Model name as reported by server                     |
+| `FT_DATA_DIR`          | `./data`                          | Path to data directory                               |
+| `SQLITE_PATH`          | `./data/sqlite/fortune.db`        | Path to SQLite reading-history database              |
+| `IMAGES_DIR`           | `./data/images`                   | Directory for card artwork images                    |
+| `EMBEDDING_MODEL`      | `BAAI/bge-small-en-v1.5`          | HuggingFace embedding model (name or local path)     |
+| `EMBEDDING_MODEL_PATH` | `./data/models/bge-small-en-v1.5` | Local path for offline embedding model               |
+| `ANTHROPIC_API_KEY`    | _(unset)_                         | Anthropic key — required by `ft-normalize-rw`        |
 | `NORMALIZE_PROVIDER`   | `api`                             | `ft-normalize-rw` backend: `api` (Claude) or `local` |
-| `NORMALIZE_MODEL`      | `claude-sonnet-4-6`               | Model id used when `NORMALIZE_PROVIDER=api`      |
+| `NORMALIZE_MODEL`      | `claude-sonnet-4-6`               | Model id used when `NORMALIZE_PROVIDER=api`          |
 
 ## Architecture
 
