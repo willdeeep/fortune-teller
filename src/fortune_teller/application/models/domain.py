@@ -33,12 +33,13 @@ class Arcana(StrEnum):
 
 
 class Suit(StrEnum):
-    """The four suits of the minor arcana (Book of Thoth naming)."""
+    """The four suits of the minor arcana. Thoth uses Disks; Rider-Waite uses Pentacles."""
 
     WANDS = "wands"
     CUPS = "cups"
     SWORDS = "swords"
     DISKS = "disks"
+    PENTACLES = "pentacles"
 
 
 class CardSection(StrEnum):
@@ -121,6 +122,9 @@ class Deck(BaseModel):
     id: Annotated[str, Field(min_length=1)]  # "book-of-thoth"
     name: Annotated[str, Field(min_length=1)]  # "Book of Thoth"
     cards: list[Card] = Field(default_factory=list)
+    source_url: str | None = None
+    attribution: str | None = None
+    description: str | None = None
 
     def card_by_id(self, card_id: str) -> Card:
         """Return the card with *card_id*.

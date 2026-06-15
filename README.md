@@ -10,7 +10,7 @@
 - Auto-deal with no-replace guarantee within a reading
 - Per-card interpretations grounded in scraped card definitions
 - Reading summary that surfaces cross-card reinforcing and conflicting themes
-- Runs entirely on-device — no external API keys or network required after the one-time ft-fetch-models step
+- Readings run entirely on-device — no external API keys or network needed at runtime (the optional Rider-Waite deck backfill, `ft-normalize-rw`, is a one-time build step that calls the Anthropic API)
 
 ## Requirements
 
@@ -28,13 +28,17 @@ uv sync --extra dev --group test --group lint
 # 2. Install git hooks
 uv run pre-commit install
 
-# 3. One-time data pipeline (scrape → parse → embed → index)
+# 3. One-time data pipeline (scrape → parse → normalise → embed → index)
 uv run ft-fetch-models      # download embedding model for offline use
-uv run ft-scrape
-uv run ft-parse
-uv run ft-embed
-uv run ft-build-index
-uv run ft-fetch-images      # download card artwork into data/images/
+uv run ft-scrape            # scrape all decks (Book of Thoth + Rider-Waite)
+uv run ft-parse             # parse all decks → card JSON (Thoth) / raw JSON (RW)
+uv run ft-normalize-rw      # Rider-Waite backfill: RawCard → Card via the Anthropic API
+                            #   • requires ANTHROPIC_API_KEY in .env (see Configuration)
+                            #   • review data/parsed/rider-waite/_normalization_report.md
+                            #   • --no-llm for a free deterministic dry run
+uv run ft-embed             # embed all decks
+uv run ft-build-index       # build the DuckDB vector index (all decks)
+uv run ft-fetch-images      # download card artwork for all parsed decks into data/images/
 
 # 4. Start the app
 uv run fortune-teller
@@ -56,16 +60,19 @@ and do **not** require a server.
 
 Override any setting with an environment variable or `.env` file:
 
-| Variable               | Default                           | Description                                      |
-| ---------------------- | --------------------------------- | ------------------------------------------------ |
-| `OPENAI_BASE_URL`      | `http://127.0.0.1:8080/v1`        | llama.cpp server                                 |
-| `OPENAI_API_KEY`       | `sk-no-key`                       | Any non-empty string                             |
-| `CHAT_MODEL`           | `local-model`                     | Model name as reported by server                 |
-| `FT_DATA_DIR`          | `./data`                          | Path to data directory                           |
-| `SQLITE_PATH`          | `./data/sqlite/fortune.db`        | Path to SQLite reading-history database          |
-| `IMAGES_DIR`           | `./data/images`                   | Directory for card artwork images                |
-| `EMBEDDING_MODEL`      | `BAAI/bge-small-en-v1.5`          | HuggingFace embedding model (name or local path) |
-| `EMBEDDING_MODEL_PATH` | `./data/models/bge-small-en-v1.5` | Local path for offline embedding model           |
+| Variable               | Default                           | Description                                          |
+| ---------------------- | --------------------------------- | ---------------------------------------------------- |
+| `OPENAI_BASE_URL`      | `http://127.0.0.1:8080/v1`        | llama.cpp server                                     |
+| `OPENAI_API_KEY`       | `sk-no-key`                       | Any non-empty string                                 |
+| `CHAT_MODEL`           | `local-model`                     | Model name as reported by server                     |
+| `FT_DATA_DIR`          | `./data`                          | Path to data directory                               |
+| `SQLITE_PATH`          | `./data/sqlite/fortune.db`        | Path to SQLite reading-history database              |
+| `IMAGES_DIR`           | `./data/images`                   | Directory for card artwork images                    |
+| `EMBEDDING_MODEL`      | `BAAI/bge-small-en-v1.5`          | HuggingFace embedding model (name or local path)     |
+| `EMBEDDING_MODEL_PATH` | `./data/models/bge-small-en-v1.5` | Local path for offline embedding model               |
+| `ANTHROPIC_API_KEY`    | _(unset)_                         | Anthropic key — required by `ft-normalize-rw`        |
+| `NORMALIZE_PROVIDER`   | `api`                             | `ft-normalize-rw` backend: `api` (Claude) or `local` |
+| `NORMALIZE_MODEL`      | `claude-sonnet-4-6`               | Model id used when `NORMALIZE_PROVIDER=api`          |
 
 ## Architecture
 

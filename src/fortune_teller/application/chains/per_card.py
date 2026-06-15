@@ -134,6 +134,7 @@ def build_per_card_context(
     vector_store: VectorStore,
     embedder: Embedder,
     *,
+    deck_id: str,
     k: int = 4,
 ) -> dict[str, str]:
     """Retrieve per-card and per-position context, then build a prompt dict.
@@ -149,6 +150,7 @@ def build_per_card_context(
         position:        The :class:`SpreadPosition` for this deal.
         vector_store:    An open :class:`VectorStore` for retrieval.
         embedder:        An :class:`Embedder` used to embed the card query.
+        deck_id:         Deck identifier used to scope the vector search.
         k:               Number of card-section chunks to retrieve.
 
     Returns:
@@ -157,6 +159,7 @@ def build_per_card_context(
     card_query = f"{card.name} {dealt.orientation.value}"
     card_embedding = embedder.embed_query(card_query)
     card_hits = vector_store.search_card_section(
+        deck_id=deck_id,
         card_id=card.id,
         query_embedding=card_embedding,
         k=k,
