@@ -2,16 +2,20 @@
 
 Page structure
 ~~~~~~~~~~~~~~
-Each page has a title (``<h2>``), a keyword list, and then bracketed
-headings that divide the content into sections:
+Each page has an ``<h1>`` title, a ``<ul>`` of bold keyword items, then a
+bracketed nav menu (``[ Actions ]`` links — ignored) followed by the real
+sections. Section headings are **uppercase anchor labels on their own line**
+(no brackets), each preceded by an ``<a name="...">`` anchor:
 
-    ``[ACTIONS]``
-    ``[OPPOSING CARDS: Some Possibilities]``
-    ``[REINFORCING CARDS: Some Possibilities]``
-    ``[DESCRIPTION]``
+    ``ACTIONS``
+    ``OPPOSING CARDS: Some Possibilities``
+    ``REINFORCING CARDS: Some Possibilities``
+    ``DESCRIPTION``
 
-Content for each section follows until the next bracketed heading (or the
-end of the page).
+Content for each section follows until the next heading (or the end of the
+page). Court cards omit the opposing/reinforcing sections. Opposing and
+reinforcing cards are ``<li><a>Name</a> - meaning`` items — only the names
+(non-``-`` lines) are captured.
 
 URL scheme
 ~~~~~~~~~~
@@ -34,8 +38,14 @@ from fortune_teller.application.models.domain import Arcana, Suit
 
 _RW_BASE_URL = "https://www.learntarot.com"
 
-# Regex matching bracketed headings like [ACTIONS] or [OPPOSING CARDS: subtitle]
-_HEADING_RE = re.compile(r"\[([A-Z\s]+)(?::[^\]]*)?\]")
+# Section headings are uppercase anchor labels on their own line (no brackets),
+# e.g. "ACTIONS" or "OPPOSING CARDS: Some Possibilities". A separate nav menu near
+# the top uses bracketed, mixed-case links ("[ Actions ]") which must NOT match —
+# hence the all-caps, whole-line (MULTILINE-anchored) pattern.
+_HEADING_RE = re.compile(
+    r"^(ACTIONS|OPPOSING CARDS|REINFORCING CARDS|DESCRIPTION)(?::.*)?$",
+    re.MULTILINE,
+)
 
 # ---------------------------------------------------------------------------
 # URL → identity map
@@ -193,12 +203,20 @@ def _extract_section_text(sections: dict[str, str], heading: str) -> str:
 
 
 def _split_names(text: str) -> list[str]:
-    """Split a comma-separated list of card names from *text*.
+    """Extract card names from a learntarot opposing/reinforcing block.
+
+    Cards are listed one per line, each followed by an indented ``- meaning``
+    line; the names are the lines that do *not* start with ``-``. (Newlines
+    must be preserved in *text* — do not whitespace-collapse it first.)
 
     Returns:
-        List of stripped, non-empty name strings.
+        List of stripped, non-empty card-name strings.
     """
-    return [n.strip() for n in text.split(",") if n.strip()]
+    return [
+        line.strip()
+        for line in text.split("\n")
+        if line.strip() and not line.strip().startswith("-")
+    ]
 
 
 def _extract_actions(raw: str) -> list[str]:
@@ -256,20 +274,19 @@ def parse_card_page(html: str, slug: str) -> RawCard:
 
     if not headings:
         raise ValueError(
-            f"No bracketed headings found in page for slug '{slug}'. "
-            "Expected at least [ACTIONS], [DESCRIPTION], etc."
+            f"No section headings found in page for slug '{slug}'. "
+            "Expected at least ACTIONS and DESCRIPTION."
         )
 
-    # Extract keywords from text before the first bracketed heading
-    pre_text = full_text[: headings[0][0]].strip()
-    # Look for "Keywords:" or "keywords:" prefix
-    kw_match = re.search(r"[Kk]eywords?:?\s*(.*)", pre_text)
-    if kw_match:
-        kw_text = kw_match.group(1).strip()
-        keywords = [k.strip() for k in kw_text.split(",") if k.strip()]
-    else:
-        # Fall back to entire pre-text as keywords
-        keywords = [k.strip() for k in pre_text.split(",") if k.strip()] if pre_text else []
+    # Keywords are the bold items of the first <ul> list (just after the <h1>
+    # title). The nav menu and section bodies are not lists, so the first <ul>
+    # is unambiguous.
+    first_ul = body.css_first("ul")
+    keywords = (
+        [li.text(strip=True) for li in first_ul.css("li") if li.text(strip=True)]
+        if first_ul is not None
+        else []
+    )
 
     # Split content into named sections
     sections: dict[str, str] = {}
@@ -292,8 +309,10 @@ def parse_card_page(html: str, slug: str) -> RawCard:
     actions = _extract_actions(actions_raw)
 
     # Extract opposing / reinforcing / description with whitespace normalisation
-    opposing_names = _split_names(_extract_section_text(sections, "OPPOSING CARDS"))
-    reinforcing_names = _split_names(_extract_section_text(sections, "REINFORCING CARDS"))
+    # Opposing/reinforcing blocks are newline-structured (name then "- meaning"),
+    # so split on the raw section text (newlines intact), not the collapsed form.
+    opposing_names = _split_names(sections.get("OPPOSING CARDS", ""))
+    reinforcing_names = _split_names(sections.get("REINFORCING CARDS", ""))
     description = _extract_section_text(sections, "DESCRIPTION")
 
     source_url = f"{_RW_BASE_URL}/{slug}.htm"

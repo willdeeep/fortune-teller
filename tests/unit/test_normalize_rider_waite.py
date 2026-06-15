@@ -20,6 +20,7 @@ from fortune_teller.application.models.domain import (
 from fortune_teller.developer.normalize.rider_waite import (
     CardProvenance,
     Provenance,
+    _parse_json_object,
     _rebucket,
     build_normalize_model,
     generate_report,
@@ -41,6 +42,35 @@ class _StubLLM:
 
     def invoke(self, messages: object) -> AIMessage:  # noqa: ARG002
         return AIMessage(content=self._response)
+
+
+@pytest.mark.unit
+class TestParseJsonObject:
+    """The extractor must survive the ways models wrap/garnish JSON."""
+
+    def test_bare_json(self) -> None:
+        assert _parse_json_object('{"light": "x"}') == {"light": "x"}
+
+    def test_fenced_json_with_lang(self) -> None:
+        assert _parse_json_object('```json\n{"light": "x"}\n```') == {"light": "x"}
+
+    def test_fenced_json_without_lang(self) -> None:
+        assert _parse_json_object('```\n{"light": "x"}\n```') == {"light": "x"}
+
+    def test_preamble_then_json(self) -> None:
+        assert _parse_json_object('Here is the JSON:\n{"light": "x"}') == {"light": "x"}
+
+    def test_unparseable_raises(self) -> None:
+        with pytest.raises(ValueError, match="did not return valid JSON"):
+            _parse_json_object("sorry, I can't do that")
+
+    def test_empty_raises(self) -> None:
+        with pytest.raises(ValueError, match="did not return valid JSON"):
+            _parse_json_object("")
+
+    def test_non_object_json_raises(self) -> None:
+        with pytest.raises(ValueError, match="Expected a JSON object"):
+            _parse_json_object("[1, 2, 3]")
 
 
 # ---------------------------------------------------------------------------
@@ -433,14 +463,22 @@ class TestBuildNormalizeModel:
             mock_build.assert_called_once()
             assert result == mock_build.return_value
 
-    def test_api_provider_constructs_chat_anthropic(self) -> None:
-        """``provider='api'`` should construct ChatAnthropic."""
+    def test_api_provider_constructs_chat_anthropic(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """``provider='api'`` should construct ChatAnthropic with the configured key.
+
+        Pin the key to a fixed value so the test is independent of the
+        developer's ``.env`` (and never echoes a real secret on failure).
+        """
+        monkeypatch.setattr(
+            "fortune_teller.developer.normalize.rider_waite.settings.anthropic_api_key",
+            "test-key",
+        )
         with patch("langchain_anthropic.ChatAnthropic") as mock_chat:
             result = build_normalize_model(provider="api", model="claude-sonnet-4-6")
             mock_chat.assert_called_once_with(
                 model="claude-sonnet-4-6",
                 temperature=0.0,
-                anthropic_api_key="",
+                anthropic_api_key="test-key",
                 timeout=180,
             )
             assert result == mock_chat.return_value

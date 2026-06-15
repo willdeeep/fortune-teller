@@ -1,6 +1,11 @@
 """Unit tests for the learntarot.com HTML parser.
 
-All tests use inline HTML fixtures — no live HTTP calls or fixture files.
+Fixtures mirror the *real* learntarot DOM (fake card text, real structure):
+an ``<h1>`` title, a ``<ul>`` of bold keyword items, a bracketed nav menu
+(``[ Actions ]`` links — which must be ignored), then uppercase section
+headings anchored by ``<a name="...">`` (``ACTIONS``, ``OPPOSING CARDS: ...``,
+``REINFORCING CARDS: ...``, ``DESCRIPTION``) whose card lists are
+``<li><a>Name</a> - meaning`` items. No live HTTP and no copyrighted text.
 """
 
 from __future__ import annotations
@@ -11,79 +16,94 @@ from fortune_teller.application.models.domain import Arcana, Suit
 from fortune_teller.developer.parse.learntarot import parse_card_page
 
 # ---------------------------------------------------------------------------
-# Inline HTML fixtures
+# Inline HTML fixtures (structurally faithful to learntarot.com)
 # ---------------------------------------------------------------------------
 
 _MAJ00_HTML = """\
-<html>
-<head><title>The Fool | Learntarot</title></head>
-<body>
-<h2>The Fool</h2>
-<p>Keywords: beginnings, innocence, spontaneity, free spirit</p>
-<p>[ACTIONS]</p>
+<html><head><title>THE FOOL</title></head><body>
+<h1>THE FOOL</h1>
 <ul>
-<li>Take a leap of faith</li>
-<li>Embrace the unknown</li>
-<li>Trust the process</li>
+<li><b>Beginning</b>
+<li><b>Spontaneity</b>
+<li><b>Faith</b>
 </ul>
-<p>[OPPOSING CARDS: Some Possibilities]</p>
-<p>The Magician, The High Priestess</p>
-<p>[REINFORCING CARDS: Some Possibilities]</p>
-<p>The World, The Star</p>
-<p>[DESCRIPTION]</p>
-<p>The Fool card is the first card of the Major Arcana. It represents new
-beginnings, innocence, and spontaneity. The Fool is depicted as a carefree
-figure standing at the edge of a cliff, ready to step into the unknown.
-This card encourages you to take a leap of faith and trust the universe.</p>
-</body>
-</html>"""
+<img src="rbowline.gif">
+<a href="#actions"><b>[ Actions ]</b></a>
+<a href="#opposite"><b>[ Opposing Cards ]</b></a>
+<a href="#reinforce"><b>[ Reinforcing Cards ]</b></a>
+<a href="#description"><b>[ Description ]</b></a>
+<a href="howcard.htm#howreversed"><b>[ Reversed? ]</b></a>
+<img src="rbowline.gif">
+<a name="actions"><b><a href="howcard.htm#howactions">ACTIONS</a></b></a>
+<dl>
+<dt>beginning a new phase
+<dt>striking out on a new path
+</dl>
+<a name="opposite"><b><a href="#o">OPPOSING CARDS: Some Possibilities</a></b></a>
+<ul>
+<li><a href="maj05.htm">Hierophant</a> - following convention
+<li><a href="maj13.htm">Death</a> - ending, closing down
+</ul>
+<a name="reinforce"><b><a href="#r">REINFORCING CARDS: Some Possibilities</a></b></a>
+<ul>
+<li><a href="maj17.htm">Star</a> - faith, trust
+<li><a href="maj20.htm">Judgement</a> - rebirth
+</ul>
+<a name="description"><b><a href="howcard.htm#howdesc">DESCRIPTION</a></b></a>
+<p>The Fool stands at the beginning of the journey, ready to leap into the unknown.
+</body></html>"""
 
 _C7_HTML = """\
-<html>
-<head><title>Seven of Cups | Learntarot</title></head>
-<body>
-<h2>Seven of Cups</h2>
-<p>Keywords: choices, illusion, fantasy, wishful thinking</p>
-<p>[ACTIONS]</p>
+<html><head><title>SEVEN OF CUPS</title></head><body>
+<h1>SEVEN OF CUPS</h1>
 <ul>
-<li>Consider your options carefully</li>
-<li>Distinguish reality from fantasy</li>
-<li>Make a conscious choice</li>
+<li><b>Wishful Thinking</b>
+<li><b>Options</b>
+<li><b>Dissipation</b>
 </ul>
-<p>[OPPOSING CARDS: Some Possibilities]</p>
-<p>The Star, Temperance</p>
-<p>[REINFORCING CARDS: Some Possibilities]</p>
-<p>The Moon, The Devil</p>
-<p>[DESCRIPTION]</p>
-<p>The Seven of Cups shows a person confronted by seven cups floating on a cloud,
-each offering a different vision or temptation. The card warns against wishful
-thinking and encourages clear-eyed decision-making.</p>
-</body>
-</html>"""
+<img src="rbowline.gif">
+<a href="#actions"><b>[ Actions ]</b></a>
+<a href="#description"><b>[ Description ]</b></a>
+<img src="rbowline.gif">
+<a name="actions"><b><a href="howcard.htm#howactions">ACTIONS</a></b></a>
+<dl>
+<dt>indulging in wishful thinking
+<dt>weighing many options
+</dl>
+<a name="opposite"><b><a href="#o">OPPOSING CARDS: Some Possibilities</a></b></a>
+<ul>
+<li><a href="maj01.htm">Magician</a> - focus and commitment
+<li><a href="maj04.htm">Emperor</a> - discipline, structure
+</ul>
+<a name="reinforce"><b><a href="#r">REINFORCING CARDS: Some Possibilities</a></b></a>
+<ul>
+<li><a href="maj15.htm">Devil</a> - excess, illusion
+<li><a href="maj18.htm">Moon</a> - fantasy
+</ul>
+<a name="description"><b><a href="howcard.htm#howdesc">DESCRIPTION</a></b></a>
+<p>The Seven of Cups warns against wishful thinking when faced with many options.
+</body></html>"""
 
+# Court cards on learntarot have ACTIONS + DESCRIPTION only — no opposing/reinforcing.
 _WPG_HTML = """\
-<html>
-<head><title>Page of Wands | Learntarot</title></head>
-<body>
-<h2>Page of Wands</h2>
-<p>Keywords: enthusiasm, exploration, discovery, free spirit</p>
-<p>[ACTIONS]</p>
+<html><head><title>PAGE OF WANDS</title></head><body>
+<h1>PAGE OF WANDS</h1>
 <ul>
-<li>Explore new ideas</li>
-<li>Start a creative project</li>
-<li>Embrace your curiosity</li>
+<li><b>Be Creative</b>
+<li><b>Be Enthusiastic</b>
 </ul>
-<p>[OPPOSING CARDS: Some Possibilities]</p>
-<p>Knight of Wands, King of Wands</p>
-<p>[REINFORCING CARDS: Some Possibilities]</p>
-<p>Ace of Wands, The Sun</p>
-<p>[DESCRIPTION]</p>
-<p>The Page of Wands is a youthful figure full of creative fire and adventurous
-spirit. This card heralds new opportunities for growth, learning, and
-exploration. The energy is fresh, enthusiastic, and unburdened by past
-failures.</p>
-</body>
-</html>"""
+<img src="rbowline.gif">
+<a href="#actions"><b>[ Actions ]</b></a>
+<a href="#description"><b>[ Description ]</b></a>
+<img src="rbowline.gif">
+<a name="actions"><b><a href="howcard.htm#howactions">ACTIONS</a></b></a>
+<dl>
+<dt>taking a creative approach
+<dt>exploring with enthusiasm
+</dl>
+<a name="description"><b><a href="howcard.htm#howdesc">DESCRIPTION</a></b></a>
+<p>The Page of Wands brings opportunities for passion and creative adventure.
+</body></html>"""
 
 
 # ---------------------------------------------------------------------------
@@ -107,28 +127,25 @@ class TestParseMajorArcana:
         assert self.card.number == 0
 
     def test_keywords_extracted(self) -> None:
-        assert len(self.card.keywords) >= 3
-        assert "beginnings" in self.card.keywords
-        assert "innocence" in self.card.keywords
+        assert self.card.keywords == ["Beginning", "Spontaneity", "Faith"]
 
     def test_actions_non_empty(self) -> None:
-        assert len(self.card.actions) > 0
-        assert "Take a leap of faith" in self.card.actions
-        assert "Embrace the unknown" in self.card.actions
+        assert "beginning a new phase" in self.card.actions
+        assert "striking out on a new path" in self.card.actions
 
     def test_opposing_names_parsed(self) -> None:
-        assert len(self.card.opposing_names) > 0
-        assert "The Magician" in self.card.opposing_names
-        assert "The High Priestess" in self.card.opposing_names
+        # Names only — the "- meaning" sub-lines are dropped, no "The" prefix.
+        assert self.card.opposing_names == ["Hierophant", "Death"]
 
     def test_reinforcing_names_parsed(self) -> None:
-        assert len(self.card.reinforcing_names) > 0
-        assert "The World" in self.card.reinforcing_names
-        assert "The Star" in self.card.reinforcing_names
+        assert self.card.reinforcing_names == ["Star", "Judgement"]
+
+    def test_nav_menu_not_treated_as_section(self) -> None:
+        # The bracketed "[ Actions ]" nav links must not create sections.
+        assert "[ Actions ]" not in self.card.actions
 
     def test_description_non_empty(self) -> None:
-        assert len(self.card.description) > 10
-        assert "leap of faith" in self.card.description
+        assert "leap into the unknown" in self.card.description
 
     def test_source_url_correct(self) -> None:
         assert self.card.source_url == "https://www.learntarot.com/maj00.htm"
@@ -155,23 +172,18 @@ class TestParsePipCard:
         assert self.card.number == 7
 
     def test_keywords_extracted(self) -> None:
-        assert "choices" in self.card.keywords
-        assert "illusion" in self.card.keywords
+        assert self.card.keywords == ["Wishful Thinking", "Options", "Dissipation"]
 
     def test_actions_non_empty(self) -> None:
-        assert len(self.card.actions) > 0
-        assert "Consider your options carefully" in self.card.actions
+        assert "indulging in wishful thinking" in self.card.actions
 
     def test_opposing_names_parsed(self) -> None:
-        assert "The Star" in self.card.opposing_names
-        assert "Temperance" in self.card.opposing_names
+        assert self.card.opposing_names == ["Magician", "Emperor"]
 
     def test_reinforcing_names_parsed(self) -> None:
-        assert "The Moon" in self.card.reinforcing_names
-        assert "The Devil" in self.card.reinforcing_names
+        assert self.card.reinforcing_names == ["Devil", "Moon"]
 
     def test_description_non_empty(self) -> None:
-        assert len(self.card.description) > 10
         assert "Seven of Cups" in self.card.description
 
     def test_source_url_correct(self) -> None:
@@ -179,7 +191,7 @@ class TestParsePipCard:
 
 
 # ---------------------------------------------------------------------------
-# Page of Wands — court card
+# Page of Wands — court card (no opposing/reinforcing sections)
 # ---------------------------------------------------------------------------
 
 
@@ -199,23 +211,17 @@ class TestParseCourtCard:
         assert self.card.number == 11
 
     def test_keywords_extracted(self) -> None:
-        assert "enthusiasm" in self.card.keywords
-        assert "exploration" in self.card.keywords
+        assert self.card.keywords == ["Be Creative", "Be Enthusiastic"]
 
     def test_actions_non_empty(self) -> None:
-        assert len(self.card.actions) > 0
-        assert "Explore new ideas" in self.card.actions
+        assert "taking a creative approach" in self.card.actions
 
-    def test_opposing_names_parsed(self) -> None:
-        assert "Knight of Wands" in self.card.opposing_names
-        assert "King of Wands" in self.card.opposing_names
-
-    def test_reinforcing_names_parsed(self) -> None:
-        assert "Ace of Wands" in self.card.reinforcing_names
-        assert "The Sun" in self.card.reinforcing_names
+    def test_court_cards_have_no_opposing_or_reinforcing(self) -> None:
+        # learntarot court pages omit these sections entirely.
+        assert self.card.opposing_names == []
+        assert self.card.reinforcing_names == []
 
     def test_description_non_empty(self) -> None:
-        assert len(self.card.description) > 10
         assert "Page of Wands" in self.card.description
 
     def test_source_url_correct(self) -> None:
@@ -233,41 +239,28 @@ class TestParseCardErrors:
         with pytest.raises(ValueError, match="Unknown learntarot slug"):
             parse_card_page("<html></html>", "nonexistent")
 
-    def test_missing_required_heading_raises_value_error(self) -> None:
-        """Page without [ACTIONS] heading should raise ValueError."""
-        html = """\
-<html>
-<body>
-<p>Keywords: test</p>
-<p>[DESCRIPTION]</p>
-<p>Some description.</p>
-</body>
-</html>"""
+    def test_missing_actions_heading_raises_value_error(self) -> None:
+        """A page with DESCRIPTION but no ACTIONS heading must raise."""
+        html = (
+            "<html><body><h1>X</h1><ul><li><b>kw</b></ul>"
+            "<p>DESCRIPTION</p><p>Some description.</p></body></html>"
+        )
         with pytest.raises(ValueError, match="missing required heading"):
             parse_card_page(html, "maj00")
 
     def test_missing_description_heading_raises_value_error(self) -> None:
-        """Page without [DESCRIPTION] heading should raise ValueError."""
-        html = """\
-<html>
-<body>
-<p>Keywords: test</p>
-<p>[ACTIONS]</p>
-<p>Do something.</p>
-</body>
-</html>"""
+        """A page with ACTIONS but no DESCRIPTION heading must raise."""
+        html = (
+            "<html><body><h1>X</h1><ul><li><b>kw</b></ul>"
+            "<p>ACTIONS</p><p>Do something.</p></body></html>"
+        )
         with pytest.raises(ValueError, match="missing required heading"):
             parse_card_page(html, "maj00")
 
-    def test_no_bracketed_headings_raises_value_error(self) -> None:
-        """Page with no bracketed headings at all should raise ValueError."""
-        html = """\
-<html>
-<body>
-<p>Some random content with no structure.</p>
-</body>
-</html>"""
-        with pytest.raises(ValueError, match="No bracketed headings"):
+    def test_no_section_headings_raises_value_error(self) -> None:
+        """A page with no recognised headings at all must raise."""
+        html = "<html><body><p>Some random content with no structure.</p></body></html>"
+        with pytest.raises(ValueError, match="No section headings"):
             parse_card_page(html, "maj00")
 
     def test_empty_html_raises_error(self) -> None:

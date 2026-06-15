@@ -2,9 +2,10 @@
 
 Usage::
 
-    uv run ft-parse                           # parse all cached thothreadings HTML
-    uv run ft-parse --deck book-of-thoth
-    uv run ft-parse --source learntarot       # parse Rider-Waite from learntarot.com
+    uv run ft-parse                           # parse ALL cached sources (Thoth + Rider-Waite)
+    uv run ft-parse --source thothreadings    # just the Book of Thoth
+    uv run ft-parse --source learntarot       # just Rider-Waite (from learntarot.com)
+    uv run ft-parse --deck book-of-thoth      # thothreadings output deck id
 """
 
 from __future__ import annotations
@@ -31,7 +32,8 @@ _SOURCE_CONFIG: dict[str, tuple[str, str]] = {
     "learntarot": ("learntarot.com", "fortune_teller.developer.parse.learntarot"),
 }
 
-_DEFAULT_SOURCE = "thothreadings"
+#: ``--source`` default. ``"all"`` parses every configured source.
+_DEFAULT_SOURCE = "all"
 
 
 def _import_parser(
@@ -94,18 +96,13 @@ def _parse_one_spread(
     return out.name
 
 
-@app.command()
-def main(
-    deck: str = typer.Option("book-of-thoth", "--deck", help="Deck identifier."),
-    source: str = typer.Option(_DEFAULT_SOURCE, "--source", help="Parsing source."),
-) -> None:
-    """Parse cached HTML into structured card JSON."""
-    source_cfg = _SOURCE_CONFIG.get(source)
-    if source_cfg is None:
-        console.print(f"[red]Unknown source: {source!r}. Choose from: {list(_SOURCE_CONFIG)}[/red]")
-        raise typer.Exit(1)
+def _parse_source(source: str, deck: str) -> tuple[int, int]:
+    """Parse all cached HTML for one *source*. Returns ``(cards_written, errors)``.
 
-    cache_name, _module_path = source_cfg
+    A source with no cached HTML is skipped (returns ``(0, 0)``) rather than
+    failing, so ``--source all`` works even before every source is scraped.
+    """
+    cache_name, _module_path = _SOURCE_CONFIG[source]
     cache_dir = settings.ft_data_dir / "cache" / cache_name
 
     parse_card_page, parse_spread_page = _import_parser(source)
@@ -114,20 +111,17 @@ def main(
         card_out_dir = settings.ft_data_dir / "raw" / "rider-waite"
     else:
         card_out_dir = settings.ft_data_dir / "parsed" / deck
-
     card_out_dir.mkdir(parents=True, exist_ok=True)
 
     html_files = sorted(cache_dir.glob("*.html"))
     if not html_files:
-        console.print(f"[red]No HTML files found in {cache_dir}[/red]")
-        raise typer.Exit(1)
+        console.print(f"[yellow]{source}: no cached HTML in {cache_dir} (skipping)[/yellow]")
+        return 0, 0
 
     cards_written = errors = 0
-
     for html_path in html_files:
         slug = html_path.stem
         html = html_path.read_text(encoding="utf-8")
-
         try:
             if source == "thothreadings" and slug in _SPREAD_SLUGS:
                 out_name = _parse_one_spread(html, slug, parse_spread_page)  # type: ignore[arg-type]
@@ -140,6 +134,36 @@ def main(
             console.print(f"  [red]ERROR[/red]  {slug}: {exc}")
             errors += 1
 
-    console.print(f"\n[bold]Done.[/bold] {cards_written} cards, {errors} errors.")
-    if errors:
+    console.print(f"[bold]{source}:[/bold] {cards_written} cards, {errors} errors.")
+    return cards_written, errors
+
+
+@app.command()
+def main(
+    deck: str = typer.Option("book-of-thoth", "--deck", help="Deck id for thothreadings output."),
+    source: str = typer.Option(
+        _DEFAULT_SOURCE,
+        "--source",
+        help="Source: 'all' (default), 'thothreadings', or 'learntarot'.",
+    ),
+) -> None:
+    """Parse cached HTML into structured card JSON. With no --source, parses every source."""
+    if source == "all":
+        sources = list(_SOURCE_CONFIG)
+    elif source in _SOURCE_CONFIG:
+        sources = [source]
+    else:
+        console.print(
+            f"[red]Unknown source: {source!r}. Choose from: {['all', *_SOURCE_CONFIG]}[/red]"
+        )
+        raise typer.Exit(1)
+
+    total_cards = total_errors = 0
+    for src in sources:
+        cards, errs = _parse_source(src, deck)
+        total_cards += cards
+        total_errors += errs
+
+    console.print(f"\n[bold]Done.[/bold] {total_cards} cards, {total_errors} errors total.")
+    if total_errors:
         raise typer.Exit(1)
