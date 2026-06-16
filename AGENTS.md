@@ -28,22 +28,42 @@ uv run pytest -m "unit and not slow" -q --no-header --no-cov
 ## Package layout
 
 - `src/fortune_teller/application/` — runtime (UI, chains, services, models, stores)
-- `src/fortune_teller/developer/` — offline tooling (scrape, parse, embed, fetch-images, fetch-models, build-index)
+- `src/fortune_teller/developer/` — offline tooling (scrape, parse, normalize, embed, fetch-images, fetch-models, build-index)
 - `tests/unit/`, `tests/integration/` — never under `src/`
 - No new top-level packages
+
+## Data pipeline (order matters)
+
+```bash
+ft-fetch-models      # download embedding model (one-time)
+ft-scrape            # scrape all decks (--source thoth|learntarot|all, default all)
+ft-parse             # parse all decks (--source thoth|learntarot|all, default all)
+ft-normalize-rw      # Rider-Waite only: RawCard → Card via LLM (--no-llm for deterministic dry run)
+ft-embed             # embed all decks (skips meta.json)
+ft-build-index       # build DuckDB vector index (all decks)
+ft-fetch-images      # download card artwork (--deck book-of-thoth|rider-waite|all, default all)
+```
+
+`ft-scrape`/`ft-parse` use `--source`; `ft-fetch-images` uses `--deck` — different flags for the same concept.
 
 ## Key gotchas
 
 - **Pydantic models are frozen** (`ConfigDict(frozen=True)`). Use `model.model_copy(update={...})`, never mutate.
 - **Vector store is DuckDB VSS** (HNSW, cosine, 384-dim) — not FAISS or Chroma.
+- **`search_card_section` requires `deck_id`** — the SQL filters `AND deck_id = ?`; passing the wrong deck returns nothing.
 - **ChatOpenAI timeout is 180s** (not the default 60s) — CPU-only llama.cpp can take 120s on summary prompts.
 - **Images are deck-scoped**: `settings.images_dir / deck_id / card_id.<ext>`. Always pass `images_dir / service.deck_id`, never bare `images_dir`.
 - **Gradio `allowed_paths`** must include the deck image directory, or Gradio refuses to serve images.
 - **Typer CLI entry points** reference the Typer `app` object (e.g. `cli:app`), not a bare `main()` function — calling the function directly skips click argument parsing.
 - **Lazy imports** in `services/reading.py` and `ui/app.py` are intentional (`# noqa: PLC0415`) — they defer config and heavy service loads so test patches work correctly.
+- **`langchain-anthropic` is a dev/optional dependency** — imported lazily inside functions in `developer/normalize/`, not at module level. The app runs without it; only `ft-normalize-rw` needs it.
+- **`Runnable[Any, Any]` not bare `Runnable`** — `langchain_core.runnables.Runnable` is generic; bare `Runnable` triggers mypy `type-arg` error.
 - **`data/` is gitignored** except `data/models/` (has `!data/models/` exception for the offline embedding model).
 - **`.env` auto-loads** via pydantic-settings; stale values leak into tests. Clean it if tests behave strangely.
-- **Data pipeline is order-sensitive**: `ft-scrape` → `ft-parse` → `ft-embed` → `ft-build-index`
+- **`Suit.PENTACLES`** is for Rider-Waite; Thoth uses `Suit.DISKS`. Both are valid enum values; minor-arcana cards must carry the suit matching their deck.
+- **`meta.json`** in each deck directory (`data/parsed/<deck_id>/meta.json`) carries `name`, `source_url`, `attribution`, `description`. `load_deck` reads it; `list_decks()` uses it for display names. Card JSON files are loaded alongside it (excluded by glob).
+- **Normalization provenance** is stored in sidecar files (`data/parsed/rider-waite/_norm/<id>.json`), not in the `Card` domain model. A `_normalization_report.md` is also generated in the deck directory.
+- **`Card.image_url`** is `str | None` — populated by the parser from HTML, carried through normalization. Not all cards have images.
 - Config singleton: `from fortune_teller.application.config import settings`
 
 ## Test conventions
