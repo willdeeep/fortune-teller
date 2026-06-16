@@ -42,7 +42,7 @@ from fortune_teller.developer.normalize.prompts import (
     REBUCKET_HUMAN,
     REBUCKET_SYSTEM,
 )
-from fortune_teller.developer.parse.learntarot import RawCard
+from fortune_teller.developer.parse.learntarot import RawCard, resolve_card_names
 
 # ---------------------------------------------------------------------------
 # Provenance
@@ -232,7 +232,7 @@ _SECTION_NAMES_GAP = ("drive", "question", "proposal", "confirmation", "affirmat
 def normalize_card(
     raw_card: RawCard,
     llm: Runnable[Any, Any] | None = None,
-) -> tuple[Card, CardProvenance]:
+) -> tuple[Card, CardProvenance, list[str]]:
     """Normalise a :class:`RawCard` into a Thoth-shaped :class:`Card`.
 
     Args:
@@ -241,7 +241,9 @@ def normalize_card(
             deterministic stage (stage 0) runs.
 
     Returns:
-        A ``(Card, CardProvenance)`` tuple.
+        A ``(Card, CardProvenance, unresolved_names)`` tuple.
+        ``unresolved_names`` lists any reinforce/oppose card names that
+        could not be resolved to IDs.
     """
     sections: dict[str, str] = {}
     provenance: dict[str, Provenance] = {}
@@ -252,6 +254,11 @@ def normalize_card(
 
     sections["overall"] = raw_card.description
     provenance["overall"] = Provenance.DETERMINISTIC
+
+    # Resolve reinforce/oppose names → IDs (deterministic, no LLM)
+    reinforcing_ids, unres_reinforce = resolve_card_names(raw_card.reinforcing_names)
+    opposing_ids, unres_oppose = resolve_card_names(raw_card.opposing_names)
+    unresolved_names = unres_reinforce + unres_oppose
 
     # ---- Stage 1: re-bucket ----
     if llm is not None:
@@ -301,11 +308,13 @@ def normalize_card(
         suit=raw_card.suit,
         number=raw_card.number,
         sections=card_sections,
+        reinforcing_ids=reinforcing_ids,
+        opposing_ids=opposing_ids,
         source_url=HttpUrl(raw_card.source_url),
         image_url=raw_card.image_url,
     )
 
-    return card, CardProvenance(card_id=raw_card.id, sections=dict(provenance))
+    return card, CardProvenance(card_id=raw_card.id, sections=dict(provenance)), unresolved_names
 
 
 # ---------------------------------------------------------------------------
@@ -313,12 +322,18 @@ def normalize_card(
 # ---------------------------------------------------------------------------
 
 
-def generate_report(results: list[tuple[Card, CardProvenance]]) -> str:
+def generate_report(
+    results: list[tuple[Card, CardProvenance]],
+    *,
+    unresolved: list[tuple[str, str]] | None = None,
+) -> str:
     """Generate a markdown normalisation report.
 
     Args:
         results: List of ``(Card, CardProvenance)`` tuples from
             :func:`normalize_deck`.
+        unresolved: Optional list of ``(card_id, unresolved_name)`` tuples
+            for reinforce/oppose names that could not be resolved to IDs.
 
     Returns:
         A markdown string.
@@ -362,6 +377,26 @@ def generate_report(results: list[tuple[Card, CardProvenance]]) -> str:
             "",
             f"- **Synthesised sections (🤖):** {synthesized_count}",
             f"- **Empty sections (⚠️):** {empty_count}",
+        ]
+    )
+
+    if unresolved:
+        lines.extend(
+            [
+                "",
+                "## Unresolved card names",
+                "",
+                "The following reinforce/oppose names could not be resolved to card IDs:",
+                "",
+                "| Card | Unresolved name |",
+                "|------|-----------------|",
+            ]
+        )
+        for card_id, name in unresolved:
+            lines.append(f"| {card_id} | {name} |")
+
+    lines.extend(
+        [
             "",
             "## Re-run",
             "",
@@ -413,6 +448,7 @@ def normalize_deck(
     results: list[tuple[Card, CardProvenance]] = []
 
     failed: list[tuple[str, str]] = []
+    all_unresolved: list[tuple[str, str]] = []  # (card_id, unresolved_name)
 
     for raw_path in raw_files:
         raw_data = json.loads(raw_path.read_text(encoding="utf-8"))
@@ -424,12 +460,13 @@ def normalize_deck(
         # One bad LLM response shouldn't sink the whole 78-card batch — record
         # the failure and carry on so the rest still get written.
         try:
-            card, prov = normalize_card(raw_card, llm=llm)
+            card, prov, card_unresolved = normalize_card(raw_card, llm=llm)
         except Exception as exc:  # batch tool must be resilient: skip one bad card
             failed.append((raw_card.id, str(exc)))
             print(f"  ERROR normalising {raw_card.id}: {exc}")
             continue
         results.append((card, prov))
+        all_unresolved.extend((raw_card.id, name) for name in card_unresolved)
 
         # Write Card JSON
         card_path = out_dir / f"{raw_card.id}.json"
@@ -454,7 +491,7 @@ def normalize_deck(
     meta_path.write_text(json.dumps(meta, indent=2), encoding="utf-8")
 
     # Write normalisation report
-    report = generate_report(results)
+    report = generate_report(results, unresolved=all_unresolved)
     report_path = out_dir / "_normalization_report.md"
     report_path.write_text(report, encoding="utf-8")
 

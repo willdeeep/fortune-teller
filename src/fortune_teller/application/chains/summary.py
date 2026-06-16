@@ -3,8 +3,9 @@
 Produces a final summary that surfaces reinforcing or conflicting patterns
 across the per-card interpretations. Like the per-card chain, this is a
 pure ``prompt | llm | StrOutputParser`` pipeline — no retrieval happens
-inside the chain. The prompt is fed a pre-rendered block of card summaries
-plus a description of the spread.
+inside the chain. The prompt is fed a pre-rendered block of card summaries,
+a description of the spread, and optionally a synergy block describing
+reinforce/oppose relationships between dealt cards.
 """
 
 from __future__ import annotations
@@ -19,6 +20,7 @@ from fortune_teller.application.models.domain import (
     CardInterpretation,
     Spread,
 )
+from fortune_teller.application.services.synergy import SynergyHit
 
 # ---------------------------------------------------------------------------
 # Prompt
@@ -31,6 +33,8 @@ Rules:
 - Use ONLY the text provided in the card and position context below.
 - Identify any reinforcing themes (cards sharing keywords, arcana, elements).
 - Identify any conflicting or tensioning themes.
+- If card synergies are provided, incorporate them: reinforcing pairs amplify \
+shared themes; opposing pairs create tension or creative conflict.
 - Do not invent symbolic meaning not present in the context.
 - Respond in 4 to 8 sentences.
 - Do not mention the word "context" in your response.
@@ -43,7 +47,7 @@ Spread: {spread_name}
 
 Spread description:
 {spread_description}
-
+{synergy_block}\
 Produce a summary reading.
 """
 
@@ -71,6 +75,30 @@ def build_summary_chain(llm: Runnable[Any, Any]) -> Runnable[Any, Any]:
 
 
 # ---------------------------------------------------------------------------
+# Synergy rendering
+# ---------------------------------------------------------------------------
+
+
+def render_synergy_block(synergies: list[SynergyHit]) -> str:
+    """Render a list of :class:`SynergyHit` objects as a prompt block.
+
+    Returns an empty string if the list is empty (so the prompt template
+    degrades gracefully when no synergies are available).
+    """
+    if not synergies:
+        return ""
+    lines = ["\nCard synergies:"]
+    for hit in synergies:
+        rel = "reinforce" if hit.effective == "reinforce" else "oppose"
+        lines.append(
+            f"- {hit.card_name_a} ({hit.orientation_a.value}) and "
+            f"{hit.card_name_b} ({hit.orientation_b.value}): {rel}"
+        )
+    lines.append("")
+    return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
 # Prompt-input builder
 # ---------------------------------------------------------------------------
 
@@ -78,6 +106,7 @@ def build_summary_chain(llm: Runnable[Any, Any]) -> Runnable[Any, Any]:
 def build_summary_context(
     interpretations: list[CardInterpretation],
     spread: Spread,
+    synergies: list[SynergyHit] | None = None,
 ) -> dict[str, str]:
     """Build the prompt input dict from finished card interpretations.
 
@@ -86,11 +115,14 @@ def build_summary_context(
             order, not the position index on the model, determines
             numbering in the rendered summary block.
         spread: The :class:`Spread` the reading is for.
+        synergies: Optional list of :class:`SynergyHit` objects describing
+            reinforce/oppose relationships between dealt cards. When
+            ``None`` or empty, no synergy block is included.
 
     Returns:
-        A dict with keys ``spread_name``, ``card_summaries``, and
-        ``spread_description`` — the placeholders in
-        :data:`summary_prompt`.
+        A dict with keys ``spread_name``, ``card_summaries``,
+        ``spread_description``, and ``synergy_block`` — the placeholders
+        in :data:`summary_prompt`.
     """
     card_summaries = "\n\n".join(
         f"Position {interp.dealt.position_index} — "
@@ -99,8 +131,10 @@ def build_summary_context(
         for interp in interpretations
     )
     spread_description = "\n".join(f"{pos.name}: {pos.meaning}" for pos in spread.positions)
+    synergy_block = render_synergy_block(synergies) if synergies else ""
     return {
         "spread_name": spread.name,
         "card_summaries": card_summaries,
         "spread_description": spread_description,
+        "synergy_block": synergy_block,
     }

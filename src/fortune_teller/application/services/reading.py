@@ -27,6 +27,7 @@ from fortune_teller.application.models.domain import (
     Spread,
 )
 from fortune_teller.application.services.deck import DeckSession
+from fortune_teller.application.services.synergy import compute_synergies
 
 # ---------------------------------------------------------------------------
 # Protocol interfaces for chain/store dependencies
@@ -260,7 +261,10 @@ class ReadingService:
         """
         summary = ""
         if self._summary_chain is not None:
-            context = build_summary_context(handle.interpretations, handle.spread)
+            synergies = compute_synergies(handle.dealt, self._deck)
+            context = build_summary_context(
+                handle.interpretations, handle.spread, synergies=synergies
+            )
             summary = self._summary_chain.invoke(context)
 
         reading = Reading(

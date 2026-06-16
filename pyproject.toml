@@ -38,6 +38,8 @@ ft-build-index   = "fortune_teller.developer.build_index.cli:app"
 ft-fetch-models  = "fortune_teller.developer.fetch_models.cli:main"
 ft-fetch-images  = "fortune_teller.developer.fetch_images.cli:app"
 ft-normalize-rw  = "fortune_teller.developer.normalize.cli:app"
+ft-normalize-thoth = "fortune_teller.developer.normalize.thoth_cli:app"
+ft-normalize     = "fortune_teller.developer.normalize.umbrella_cli:app"
 
 [dependency-groups]
 test = [
