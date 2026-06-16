@@ -126,10 +126,12 @@ class TestCardSection:
         "proposal",
         "confirmation",
         "affirmation",
+        "reinforcing",
+        "opposing",
     }
 
-    def test_has_exactly_11_members(self) -> None:
-        assert len(CardSection) == 11
+    def test_has_exactly_13_members(self) -> None:
+        assert len(CardSection) == 13
 
     def test_expected_values_present(self) -> None:
         assert {m.value for m in CardSection} == self._EXPECTED
@@ -230,6 +232,39 @@ class TestCard:
         reloaded = Card.model_validate_json(card.model_dump_json())
         assert reloaded.id == card.id
         assert reloaded.arcana == card.arcana
+
+    def test_with_reinforcing_and_opposing_ids(self) -> None:
+        card = Card(
+            id="the-fool",
+            name="The Fool",
+            arcana=Arcana.MAJOR,
+            reinforcing_ids=["the-magician", "the-empress"],
+            opposing_ids=["the-devil", "the-tower"],
+            source_url=HttpUrl(_SOURCE_URL),
+        )
+        assert card.reinforcing_ids == ["the-magician", "the-empress"]
+        assert card.opposing_ids == ["the-devil", "the-tower"]
+
+    def test_reinforcing_ids_defaults_to_empty_list(self) -> None:
+        card = _make_card()
+        assert card.reinforcing_ids == []
+
+    def test_opposing_ids_defaults_to_empty_list(self) -> None:
+        card = _make_card()
+        assert card.opposing_ids == []
+
+    def test_frozen_card_model_copy_works(self) -> None:
+        card = _make_card()
+        new_card = card.model_copy(
+            update={
+                "name": "The Fool Updated",
+                "reinforcing_ids": ["the-magician"],
+            }
+        )
+        assert new_card.name == "The Fool Updated"
+        assert new_card.reinforcing_ids == ["the-magician"]
+        # original unchanged
+        assert card.name == "The Fool"
 
 
 # ---------------------------------------------------------------------------

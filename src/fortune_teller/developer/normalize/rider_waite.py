@@ -42,7 +42,7 @@ from fortune_teller.developer.normalize.prompts import (
     REBUCKET_HUMAN,
     REBUCKET_SYSTEM,
 )
-from fortune_teller.developer.parse.learntarot import RawCard
+from fortune_teller.developer.parse.learntarot import RawCard, resolve_card_names
 
 # ---------------------------------------------------------------------------
 # Provenance
@@ -253,6 +253,10 @@ def normalize_card(
     sections["overall"] = raw_card.description
     provenance["overall"] = Provenance.DETERMINISTIC
 
+    # Resolve reinforce/oppose names → IDs (deterministic, no LLM)
+    reinforcing_ids = resolve_card_names(raw_card.reinforcing_names)
+    opposing_ids = resolve_card_names(raw_card.opposing_names)
+
     # ---- Stage 1: re-bucket ----
     if llm is not None:
         rebucketed = _rebucket(raw_card, llm)
@@ -301,6 +305,8 @@ def normalize_card(
         suit=raw_card.suit,
         number=raw_card.number,
         sections=card_sections,
+        reinforcing_ids=reinforcing_ids,
+        opposing_ids=opposing_ids,
         source_url=HttpUrl(raw_card.source_url),
         image_url=raw_card.image_url,
     )

@@ -88,6 +88,8 @@ def _make_raw_card(
     actions: list[str] | None = None,
     description: str = "A young man stands at the edge of a cliff.",
     image_url: str | None = None,
+    reinforcing_names: list[str] | None = None,
+    opposing_names: list[str] | None = None,
 ) -> RawCard:
     return RawCard(
         id=card_id,
@@ -97,8 +99,8 @@ def _make_raw_card(
         number=number,
         keywords=keywords or ["beginnings", "freedom"],
         actions=actions or ["Take a leap", "Trust the process"],
-        opposing_names=[],
-        reinforcing_names=[],
+        opposing_names=opposing_names or [],
+        reinforcing_names=reinforcing_names or [],
         description=description,
         image_url=image_url,
         source_url=f"https://www.learntarot.com/{card_id}.htm",
@@ -111,6 +113,8 @@ def _make_raw_minor_card(
     suit: Suit = Suit.WANDS,
     number: int = 1,
     image_url: str | None = None,
+    reinforcing_names: list[str] | None = None,
+    opposing_names: list[str] | None = None,
 ) -> RawCard:
     return RawCard(
         id=card_id,
@@ -120,8 +124,8 @@ def _make_raw_minor_card(
         number=number,
         keywords=["creation", "inspiration"],
         actions=["Create", "Inspire"],
-        opposing_names=[],
-        reinforcing_names=[],
+        opposing_names=opposing_names or [],
+        reinforcing_names=reinforcing_names or [],
         description="A hand holds a flowering staff.",
         image_url=image_url,
         source_url=f"https://www.learntarot.com/{card_id}.htm",
@@ -624,3 +628,49 @@ class TestRebucketHelper:
         assert isinstance(result, dict)
         assert result["light"] == "Be spontaneous."
         assert result["shadow"] == "Watch your step."
+
+
+# ---------------------------------------------------------------------------
+# Reinforce / oppose name resolution (stage 0)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestReinforceOpposeResolution:
+    """``resolve_card_names`` is called during stage 0 of normalization."""
+
+    def test_reinforcing_names_resolved_to_ids(self) -> None:
+        raw = _make_raw_card(
+            reinforcing_names=["The Magician", "The Empress"],
+        )
+        card, _ = normalize_card(raw, llm=None)
+        assert card.reinforcing_ids == ["the-magician", "the-empress"]
+
+    def test_opposing_names_resolved_to_ids(self) -> None:
+        raw = _make_raw_card(
+            opposing_names=["The Devil", "The Tower"],
+        )
+        card, _ = normalize_card(raw, llm=None)
+        assert card.opposing_ids == ["the-devil", "the-tower"]
+
+    def test_unresolvable_names_dropped_from_ids(self) -> None:
+        raw = _make_raw_card(
+            reinforcing_names=["The Fool", "Nonsense Card", "The Magician"],
+        )
+        card, _ = normalize_card(raw, llm=None)
+        assert card.reinforcing_ids == ["the-fool", "the-magician"]
+
+    def test_empty_names_produce_empty_ids(self) -> None:
+        raw = _make_raw_card()
+        card, _ = normalize_card(raw, llm=None)
+        assert card.reinforcing_ids == []
+        assert card.opposing_ids == []
+
+    def test_both_reinforcing_and_opposing_resolved(self) -> None:
+        raw = _make_raw_card(
+            reinforcing_names=["The Star", "The Sun"],
+            opposing_names=["The Moon"],
+        )
+        card, _ = normalize_card(raw, llm=None)
+        assert card.reinforcing_ids == ["the-star", "the-sun"]
+        assert card.opposing_ids == ["the-moon"]

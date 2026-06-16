@@ -18,6 +18,7 @@ from fortune_teller.developer.parse.learntarot import (
     _RW_BASE_URL,
     _extract_image_url,
     parse_card_page,
+    resolve_card_names,
 )
 
 # ---------------------------------------------------------------------------
@@ -344,3 +345,38 @@ class TestExtractImageUrl:
         assert body is not None
         result = _extract_image_url(body, _RW_BASE_URL)
         assert result == "https://www.learntarot.com/bigjpgs/cups07.jpg"
+
+
+# ---------------------------------------------------------------------------
+# resolve_card_names
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestResolveCardNames:
+    """Tests for the name → ID resolution helper."""
+
+    def test_exact_name_match_returns_correct_id(self) -> None:
+        assert resolve_card_names(["The Fool"]) == ["the-fool"]
+
+    def test_case_insensitive_match(self) -> None:
+        assert resolve_card_names(["the fool"]) == ["the-fool"]
+
+    def test_unresolvable_name_is_skipped(self) -> None:
+        assert resolve_card_names(["Non Existent Card"]) == []
+
+    def test_empty_list_returns_empty_list(self) -> None:
+        assert resolve_card_names([]) == []
+
+    def test_mixed_resolvable_and_unresolvable(self) -> None:
+        result = resolve_card_names(["The Fool", "Nonsense Card", "The Magician"])
+        assert result == ["the-fool", "the-magician"]
+
+    def test_pip_card_resolved(self) -> None:
+        assert resolve_card_names(["Two of Wands"]) == ["two-of-wands"]
+
+    def test_court_card_resolved(self) -> None:
+        assert resolve_card_names(["Page of Cups"]) == ["page-of-cups"]
+
+    def test_stripped_whitespace_handled(self) -> None:
+        assert resolve_card_names(["  The Fool  "]) == ["the-fool"]

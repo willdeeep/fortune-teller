@@ -1,4 +1,4 @@
-"""LLM prompt templates for Rider-Waite normalisation."""
+"""LLM prompt templates for Rider-Waite normalisation and Thoth synergy synthesis."""
 
 _REVERSED_RULE = (
     "A reversed card shows the card's energy is present but at a lower level"
@@ -62,4 +62,31 @@ Existing sections:
 
 Fill in the missing sections (drive, question, proposal, confirmation,
 affirmation) using only the card's own material. Respond with JSON only.
+"""
+
+SYNERGY_SYSTEM = """\
+You are a Tarot scholar. Given a card and a deck, identify cards that reinforce \
+or oppose it.
+
+Rules:
+- Reinforcing cards amplify or share the card's energy.
+- Opposing cards challenge, block, or create tension with the card's energy.
+- Use ONLY the card's own sections (keywords, light, shadow, etc.) to judge \
+  relationships.
+- Return at most 5 reinforcing IDs and 5 opposing IDs.
+- Return ONLY card IDs that exist in the provided deck card list.
+- Do NOT include the card itself in either list.
+- Respond with a JSON object: {"reinforcing_ids": [...], "opposing_ids": [...]}
+"""
+
+SYNERGY_HUMAN = """\
+Card: {card_name} ({arcana}{suit_info})
+
+Sections:
+{sections_text}
+
+Deck cards (id — name):
+{deck_card_list}
+
+Identify reinforcing and opposing cards for {card_name}. Respond with JSON only.
 """

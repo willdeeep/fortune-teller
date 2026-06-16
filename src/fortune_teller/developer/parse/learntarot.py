@@ -25,6 +25,7 @@ learntarot-internal abbreviation (e.g. ``maj00``, ``c7``, ``wpg``).
 
 from __future__ import annotations
 
+import logging
 import re
 from urllib.parse import urljoin
 
@@ -162,6 +163,36 @@ RW_CARD_MAP: dict[str, tuple[str, str, Arcana, Suit | None, int | None]] = _buil
 
 Contains exactly 78 entries (22 major + 56 minor).
 """
+
+
+def resolve_card_names(names: list[str]) -> list[str]:
+    """Resolve learntarot card display names to internal card IDs.
+
+    Names from learntarot.com use display forms like ``"2 of Wands"``,
+    ``"Page of Cups"``, ``"The Fool"``.  Match case-insensitively against
+    the ``name`` field in :data:`RW_CARD_MAP`.
+
+    Unresolvable names are logged and skipped — graceful degradation
+    means a missing reinforce link is better than a crash.
+
+    Args:
+        names: Card display names as extracted from learntarot HTML.
+
+    Returns:
+        List of resolved card IDs (order preserved, unresolvable dropped).
+    """
+    # Build name → id lookup (case-insensitive)
+    name_to_id: dict[str, str] = {entry[1].lower(): entry[0] for entry in RW_CARD_MAP.values()}
+    resolved: list[str] = []
+    for name in names:
+        key = name.strip().lower()
+        if key in name_to_id:
+            resolved.append(name_to_id[key])
+        else:
+            logging.getLogger(__name__).warning(
+                "Could not resolve card name %r to an ID; skipping", name
+            )
+    return resolved
 
 
 # ---------------------------------------------------------------------------

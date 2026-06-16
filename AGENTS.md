@@ -39,12 +39,14 @@ ft-fetch-models      # download embedding model (one-time)
 ft-scrape            # scrape all decks (--source thoth|learntarot|all, default all)
 ft-parse             # parse all decks (--source thoth|learntarot|all, default all)
 ft-normalize-rw      # Rider-Waite only: RawCard → Card via LLM (--no-llm for deterministic dry run)
+ft-normalize-thoth   # Thoth only: synthesize reinforce/oppose IDs via LLM (--no-llm for dry run)
+ft-normalize         # umbrella: runs both RW + Thoth normalizers (--deck rw|thoth|all, default all)
 ft-embed             # embed all decks (skips meta.json)
 ft-build-index       # build DuckDB vector index (all decks)
 ft-fetch-images      # download card artwork (--deck book-of-thoth|rider-waite|all, default all)
 ```
 
-`ft-scrape`/`ft-parse` use `--source`; `ft-fetch-images` uses `--deck` — different flags for the same concept.
+`ft-scrape`/`ft-parse` use `--source`; `ft-fetch-images` uses `--deck`; `ft-normalize` uses `--deck` — different flags for the same concept.
 
 ## Key gotchas
 
