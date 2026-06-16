@@ -57,10 +57,10 @@ Roadmap: **v0.6.0** Reinforce/Oppose synergy · **v0.7.0** UI improvement ·
 - **Card images** — scrape, store, and serve Book of Thoth artwork; basic
   image display alongside each card's interpretation (`ft-fetch-images`).
 
-## [0.2.0] — 2026-06-14
+## [0.2.0] — 2026-06-13
 
-> Note: shipped as a milestone/feature but never tagged as a discrete release
-> (the git tags jump `v0.1.0` → `v0.3.0`).
+> Note: tag **backfilled** on 2026-06-16 — the feature shipped on 2026-06-13
+> (commit `71c3e81`) but was not tagged at the time.
 
 ### Added
 - **Reading history persistence (SQLite)** — readings are autosaved; a History
@@ -85,6 +85,6 @@ Roadmap: **v0.6.0** Reinforce/Oppose synergy · **v0.7.0** UI improvement ·
 [0.5.0]: https://github.com/willdeeep/fortune-teller/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/willdeeep/fortune-teller/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/willdeeep/fortune-teller/compare/v0.1.0...v0.3.0
-[0.2.0]: https://github.com/willdeeep/fortune-teller/milestone/2?closed=1
+[0.2.0]: https://github.com/willdeeep/fortune-teller/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/willdeeep/fortune-teller/compare/v0.0.1-spike...v0.1.0
 [0.0.1-spike]: https://github.com/willdeeep/fortune-teller/releases/tag/v0.0.1-spike
