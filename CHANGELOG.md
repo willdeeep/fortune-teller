@@ -9,13 +9,22 @@ so a release is created by tagging — there is no version field to bump.
 
 ## [Unreleased]
 
-Roadmap: **v0.6.0** Reinforce/Oppose synergy · **v0.7.0** UI improvement ·
-**v0.8.0** added functionality (manual entry, framing question, notes).
+_Nothing yet._
 
 ## [0.5.2] — 2026-06-16
 
 ### Added
 - This `CHANGELOG.md`, documenting the release history to date.
+
+### Changed
+- **Roadmap re-prioritised** (README Roadmap table — the committed source of
+  truth): **v0.6.0** Reinforce/Oppose synergy (orientation-aware; Thoth
+  relationships LLM-backfilled) · **v0.7.0** UI improvement (framework
+  evaluation, complex spreads incl. Celtic Cross, interactive detail views,
+  deck picker, reversed-card rotation, single-user login) · **v0.8.0** added
+  functionality (manual card entry, framing question, post-reading notes).
+  Tracked in GitHub issues #26 / #9 / #7 and detailed in local planning docs
+  `.opencode/plans/0021`–`0034` (not committed).
 
 ## [0.5.1] — 2026-06-15
 
