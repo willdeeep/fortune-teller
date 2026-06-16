@@ -225,6 +225,8 @@ class TestBuildSummaryContext:
             SynergyHit(
                 card_id_a="the-fool",
                 card_id_b="the-magician",
+                card_name_a="The Fool",
+                card_name_b="The Magician",
                 orientation_a=Orientation.UPRIGHT,
                 orientation_b=Orientation.REVERSED,
                 base="reinforce",
@@ -233,8 +235,8 @@ class TestBuildSummaryContext:
         ]
         ctx = build_summary_context(interps, spread, synergies=hits)
         assert "Card synergies:" in ctx["synergy_block"]
-        assert "the-fool" in ctx["synergy_block"]
-        assert "the-magician" in ctx["synergy_block"]
+        assert "The Fool" in ctx["synergy_block"]
+        assert "The Magician" in ctx["synergy_block"]
         assert "oppose" in ctx["synergy_block"]
 
 
@@ -253,6 +255,8 @@ class TestRenderSynergyBlock:
             SynergyHit(
                 card_id_a="the-fool",
                 card_id_b="the-magician",
+                card_name_a="The Fool",
+                card_name_b="The Magician",
                 orientation_a=Orientation.UPRIGHT,
                 orientation_b=Orientation.UPRIGHT,
                 base="reinforce",
@@ -261,8 +265,8 @@ class TestRenderSynergyBlock:
         ]
         result = render_synergy_block(hits)
         assert "Card synergies:" in result
-        assert "the-fool (upright)" in result
-        assert "the-magician (upright)" in result
+        assert "The Fool (upright)" in result
+        assert "The Magician (upright)" in result
         assert "reinforce" in result
 
     def test_oppose_hit_shows_oppose(self) -> None:
@@ -270,6 +274,8 @@ class TestRenderSynergyBlock:
             SynergyHit(
                 card_id_a="the-fool",
                 card_id_b="the-tower",
+                card_name_a="The Fool",
+                card_name_b="The Tower",
                 orientation_a=Orientation.UPRIGHT,
                 orientation_b=Orientation.REVERSED,
                 base="oppose",

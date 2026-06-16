@@ -165,12 +165,91 @@ Contains exactly 78 entries (22 major + 56 minor).
 """
 
 
-def resolve_card_names(names: list[str]) -> list[str]:
+# ---------------------------------------------------------------------------
+# Name → ID resolution
+# ---------------------------------------------------------------------------
+
+# Learntarot uses display forms that differ from the canonical names in
+# RW_CARD_MAP.  The most common mismatches are:
+#
+#   - Majors without "The": "Magician" vs "The Magician", "Devil" vs "The Devil"
+#   - Numeric minors: "2 of Wands" vs "Two of Wands"
+#   - Pluralised suits: "Wand" vs "Wands" (rare but possible)
+#
+# The overrides map catches anything that still doesn't match after
+# normalisation.  Keys are the *normalised* lookup form (lowercase,
+# stripped of leading "the", digits→words, singularised suit suffix).
+_OVERRIDES: dict[str, str] = {
+    # Learntarot sometimes uses "Judgment" (US spelling) vs "Judgement"
+    "judgment": "judgement",
+    "world": "the-world",
+    "sun": "the-sun",
+    "moon": "the-moon",
+    "star": "the-star",
+    "tower": "the-tower",
+    "devil": "the-devil",
+    "hermit": "the-hermit",
+    "chariot": "the-chariot",
+    "lovers": "the-lovers",
+    "hierophant": "the-hierophant",
+    "emperor": "the-emperor",
+    "empress": "the-empress",
+    "high priestess": "the-high-priestess",
+    "magician": "the-magician",
+    "fool": "the-fool",
+}
+
+_DIGIT_TO_WORD: dict[str, str] = {
+    "1": "one",
+    "2": "two",
+    "3": "three",
+    "4": "four",
+    "5": "five",
+    "6": "six",
+    "7": "seven",
+    "8": "eight",
+    "9": "nine",
+    "10": "ten",
+}
+
+
+def _normalize_card_name(name: str) -> str:
+    """Normalise a card display name into a canonical lookup key.
+
+    Steps:
+    1. Strip and lowercase.
+    2. Strip leading ``"the "`` (learntarot majors often omit it).
+    3. Replace digit ranks with word forms (``"2 of wands"`` → ``"two of wands"``).
+    4. Singularise common suit suffixes (``"wands"`` → ``"wand"``).
+    """
+    key = name.strip().lower()
+    # Strip leading "the " — learntarot majors often lack it
+    if key.startswith("the "):
+        key = key[4:]
+    # Replace digit ranks: "2 of wands" → "two of wands"
+    for digit, word in _DIGIT_TO_WORD.items():
+        key = key.replace(f"{digit} of ", f"{word} of ")
+    # Singularise suit suffixes for partial matches
+    for plural, singular in [
+        ("wands", "wand"),
+        ("cups", "cup"),
+        ("swords", "sword"),
+        ("pentacles", "pentacle"),
+        ("disks", "disk"),
+    ]:
+        if key.endswith(f" of {plural}"):
+            key = key[: -len(plural)] + singular
+    return key
+
+
+def resolve_card_names(names: list[str]) -> tuple[list[str], list[str]]:
     """Resolve learntarot card display names to internal card IDs.
 
     Names from learntarot.com use display forms like ``"2 of Wands"``,
-    ``"Page of Cups"``, ``"The Fool"``.  Match case-insensitively against
-    the ``name`` field in :data:`RW_CARD_MAP`.
+    ``"Page of Cups"``, ``"The Fool"`` — or ``"Magician"`` (without
+    "The").  The resolver normalises both the lookup name and the
+    canonical name before matching, and falls back to an overrides
+    map for anything that still doesn't resolve.
 
     Unresolvable names are logged and skipped — graceful degradation
     means a missing reinforce link is better than a crash.
@@ -179,20 +258,39 @@ def resolve_card_names(names: list[str]) -> list[str]:
         names: Card display names as extracted from learntarot HTML.
 
     Returns:
-        List of resolved card IDs (order preserved, unresolvable dropped).
+        A ``(resolved_ids, unresolved_names)`` tuple.  ``resolved_ids``
+        preserves the input order with unresolvable entries dropped;
+        ``unresolved_names`` lists any names that could not be matched.
     """
-    # Build name → id lookup (case-insensitive)
-    name_to_id: dict[str, str] = {entry[1].lower(): entry[0] for entry in RW_CARD_MAP.values()}
+    # Build normalised-name → id lookup from RW_CARD_MAP
+    name_to_id: dict[str, str] = {}
+    for entry in RW_CARD_MAP.values():
+        card_id, canonical_name = entry[0], entry[1]
+        normalised = _normalize_card_name(canonical_name)
+        name_to_id[normalised] = card_id
+        # Also register the canonical name lowercased (for exact matches)
+        name_to_id[canonical_name.lower()] = card_id
+
+    # Add overrides
+    for override_key, card_id in _OVERRIDES.items():
+        name_to_id[override_key] = card_id
+
     resolved: list[str] = []
+    unresolved: list[str] = []
     for name in names:
-        key = name.strip().lower()
+        key = _normalize_card_name(name)
         if key in name_to_id:
             resolved.append(name_to_id[key])
+        elif name.strip().lower() in name_to_id:
+            resolved.append(name_to_id[name.strip().lower()])
         else:
+            unresolved.append(name)
             logging.getLogger(__name__).warning(
-                "Could not resolve card name %r to an ID; skipping", name
+                "Could not resolve card name %r (normalised %r) to an ID; skipping",
+                name,
+                key,
             )
-    return resolved
+    return resolved, unresolved
 
 
 # ---------------------------------------------------------------------------

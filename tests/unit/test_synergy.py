@@ -205,6 +205,8 @@ class TestSynergyHit:
         hit = SynergyHit(
             card_id_a="the-fool",
             card_id_b="the-magician",
+            card_name_a="The Fool",
+            card_name_b="The Magician",
             orientation_a=Orientation.UPRIGHT,
             orientation_b=Orientation.REVERSED,
             base="reinforce",
@@ -212,6 +214,8 @@ class TestSynergyHit:
         )
         assert hit.card_id_a == "the-fool"
         assert hit.card_id_b == "the-magician"
+        assert hit.card_name_a == "The Fool"
+        assert hit.card_name_b == "The Magician"
         assert hit.orientation_a == Orientation.UPRIGHT
         assert hit.orientation_b == Orientation.REVERSED
         assert hit.base == "reinforce"
@@ -221,6 +225,8 @@ class TestSynergyHit:
         hit = SynergyHit(
             card_id_a="a",
             card_id_b="b",
+            card_name_a="Card A",
+            card_name_b="Card B",
             orientation_a=Orientation.UPRIGHT,
             orientation_b=Orientation.UPRIGHT,
             base="reinforce",

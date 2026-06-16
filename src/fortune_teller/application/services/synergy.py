@@ -25,6 +25,8 @@ class SynergyHit:
     Attributes:
         card_id_a: First card ID (lexicographically smaller of the pair).
         card_id_b: Second card ID.
+        card_name_a: Display name of card A.
+        card_name_b: Display name of card B.
         orientation_a: Orientation of card A when dealt.
         orientation_b: Orientation of card B when dealt.
         base: The stored relationship (reinforce or oppose).
@@ -33,6 +35,8 @@ class SynergyHit:
 
     card_id_a: str
     card_id_b: str
+    card_name_a: str
+    card_name_b: str
     orientation_a: Orientation
     orientation_b: Orientation
     base: Literal["reinforce", "oppose"]
@@ -95,13 +99,18 @@ def compute_synergies(
                 if key not in seen:
                     seen.add(key)
                     other = dealt_by_id[other_id]
+                    other_card = deck.card_by_id(other_id)
                     a_id, b_id = pair
                     a_orient = d.orientation if d.card_id == a_id else other.orientation
                     b_orient = other.orientation if other.card_id == b_id else d.orientation
+                    a_name = card.name if d.card_id == a_id else other_card.name
+                    b_name = other_card.name if other.card_id == b_id else card.name
                     hits.append(
                         SynergyHit(
                             card_id_a=a_id,
                             card_id_b=b_id,
+                            card_name_a=a_name,
+                            card_name_b=b_name,
                             orientation_a=a_orient,
                             orientation_b=b_orient,
                             base="reinforce",
@@ -117,13 +126,18 @@ def compute_synergies(
                 if key not in seen:
                     seen.add(key)
                     other = dealt_by_id[other_id]
+                    other_card = deck.card_by_id(other_id)
                     a_id, b_id = pair
                     a_orient = d.orientation if d.card_id == a_id else other.orientation
                     b_orient = other.orientation if other.card_id == b_id else d.orientation
+                    a_name = card.name if d.card_id == a_id else other_card.name
+                    b_name = other_card.name if other.card_id == b_id else card.name
                     hits.append(
                         SynergyHit(
                             card_id_a=a_id,
                             card_id_b=b_id,
+                            card_name_a=a_name,
+                            card_name_b=b_name,
                             orientation_a=a_orient,
                             orientation_b=b_orient,
                             base="oppose",

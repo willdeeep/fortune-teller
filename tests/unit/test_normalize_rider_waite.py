@@ -141,25 +141,25 @@ def _make_raw_minor_card(
 class TestDeterministicStage:
     def test_keywords_section_has_deterministic_provenance(self) -> None:
         raw = _make_raw_card()
-        card, prov = normalize_card(raw, llm=None)
+        card, prov, _ = normalize_card(raw, llm=None)
         assert prov.sections["keywords"] == Provenance.DETERMINISTIC
         assert card.section_text(CardSection.KEYWORDS) == "beginnings, freedom"
 
     def test_overall_section_has_deterministic_provenance(self) -> None:
         raw = _make_raw_card()
-        card, prov = normalize_card(raw, llm=None)
+        card, prov, _ = normalize_card(raw, llm=None)
         assert prov.sections["overall"] == Provenance.DETERMINISTIC
         assert "edge of a cliff" in card.section_text(CardSection.OVERALL)
 
     def test_other_sections_are_absent(self) -> None:
         raw = _make_raw_card()
-        _, prov = normalize_card(raw, llm=None)
+        _, prov, _ = normalize_card(raw, llm=None)
         # Only keywords and overall should be present
         assert prov.sections.keys() == {"keywords", "overall"}
 
     def test_card_identity_fields_match_raw_card(self) -> None:
         raw = _make_raw_card()
-        card, _ = normalize_card(raw, llm=None)
+        card, _, _ = normalize_card(raw, llm=None)
         assert card.id == raw.id
         assert card.name == raw.name
         assert card.arcana == raw.arcana
@@ -168,14 +168,14 @@ class TestDeterministicStage:
 
     def test_minor_card_suit_is_preserved(self) -> None:
         raw = _make_raw_minor_card()
-        card, _ = normalize_card(raw, llm=None)
+        card, _, _ = normalize_card(raw, llm=None)
         assert card.suit == Suit.WANDS
         assert card.arcana == Arcana.MINOR
 
     def test_deterministic_stage_produces_byte_identical_results(self) -> None:
         raw = _make_raw_card()
-        card1, prov1 = normalize_card(raw, llm=None)
-        card2, prov2 = normalize_card(raw, llm=None)
+        card1, prov1, _ = normalize_card(raw, llm=None)
+        card2, prov2, _ = normalize_card(raw, llm=None)
         assert card1.model_dump_json() == card2.model_dump_json()
         assert prov1.model_dump_json() == prov2.model_dump_json()
 
@@ -191,13 +191,13 @@ class TestImageUrlCarryThrough:
 
     def test_image_url_carried_to_card(self) -> None:
         raw = _make_raw_card(image_url="https://example.com/big.jpg")
-        card, _ = normalize_card(raw, llm=None)
+        card, _, _ = normalize_card(raw, llm=None)
         assert card.image_url == "https://example.com/big.jpg"
 
     def test_image_url_none_stays_none(self) -> None:
         raw = _make_raw_card()
         assert raw.image_url is None
-        card, _ = normalize_card(raw, llm=None)
+        card, _, _ = normalize_card(raw, llm=None)
         assert card.image_url is None
 
     def test_image_url_preserved_with_llm(self) -> None:
@@ -212,7 +212,7 @@ class TestImageUrlCarryThrough:
                 }
             )
         )
-        card, _ = normalize_card(raw, llm=llm)
+        card, _, _ = normalize_card(raw, llm=llm)
         assert card.image_url == "https://example.com/art.jpg"
 
 
@@ -235,21 +235,21 @@ class TestRebucketStage:
     def test_sections_have_rebucketed_provenance(self) -> None:
         raw = _make_raw_card()
         llm = _StubLLM(self.REBUCKET_RESPONSE)
-        _, prov = normalize_card(raw, llm=llm)
+        _, prov, _ = normalize_card(raw, llm=llm)
         for section in ("light", "shadow", "advice", "reversed"):
             assert prov.sections[section] == Provenance.REBUCKETED
 
     def test_rebucketed_text_is_present_in_card(self) -> None:
         raw = _make_raw_card()
         llm = _StubLLM(self.REBUCKET_RESPONSE)
-        card, _ = normalize_card(raw, llm=llm)
+        card, _, _ = normalize_card(raw, llm=llm)
         assert card.section_text(CardSection.LIGHT) == "Bright opportunities ahead."
         assert card.section_text(CardSection.SHADOW) == "Risk of naivety and overconfidence."
 
     def test_keywords_and_overall_retain_deterministic_provenance(self) -> None:
         raw = _make_raw_card()
         llm = _StubLLM(self.REBUCKET_RESPONSE)
-        _, prov = normalize_card(raw, llm=llm)
+        _, prov, _ = normalize_card(raw, llm=llm)
         assert prov.sections["keywords"] == Provenance.DETERMINISTIC
         assert prov.sections["overall"] == Provenance.DETERMINISTIC
 
@@ -264,7 +264,7 @@ class TestRebucketStage:
         )
         raw = _make_raw_card()
         llm = _StubLLM(response)
-        _, prov = normalize_card(raw, llm=llm)
+        _, prov, _ = normalize_card(raw, llm=llm)
         assert prov.sections.get("light") == Provenance.REBUCKETED
         assert "shadow" not in prov.sections
 
@@ -301,7 +301,7 @@ class TestGapfillStage:
 
         # Swap to gap-fill stub
         llm2 = _StubLLM(self.GAPFILL_RESPONSE)
-        _, prov2 = normalize_card(raw, llm=llm2)
+        _, prov2, _ = normalize_card(raw, llm=llm2)
         if "drive" in prov2.sections:
             assert prov2.sections["drive"] == Provenance.SYNTHESIZED
         if "question" in prov2.sections:
@@ -310,7 +310,7 @@ class TestGapfillStage:
     def test_empty_gapfill_sections_are_absent(self) -> None:
         raw = _make_raw_card()
         llm = _StubLLM(self.GAPFILL_RESPONSE)
-        _, prov = normalize_card(raw, llm=llm)
+        _, prov, _ = normalize_card(raw, llm=llm)
         assert "proposal" not in prov.sections
         assert "confirmation" not in prov.sections
         assert "affirmation" not in prov.sections
@@ -332,7 +332,7 @@ class TestGapfillStage:
                     return AIMessage(content=rebucket_response)
                 return AIMessage(content=gapfill_response)
 
-        _, prov = normalize_card(raw, llm=_TwoStageLLM())
+        _, prov, _ = normalize_card(raw, llm=_TwoStageLLM())
         assert prov.sections["keywords"] == Provenance.DETERMINISTIC
         assert prov.sections["overall"] == Provenance.DETERMINISTIC
         assert prov.sections["light"] == Provenance.REBUCKETED
@@ -349,7 +349,7 @@ class TestGapfillStage:
 class TestAssembly:
     def test_major_arcana_card_has_suit_none(self) -> None:
         raw = _make_raw_card()  # major arcana, suit=None
-        card, _ = normalize_card(raw, llm=None)
+        card, _, _ = normalize_card(raw, llm=None)
         assert card.arcana == Arcana.MAJOR
         assert card.suit is None
         # Validates against domain model validator
@@ -357,7 +357,7 @@ class TestAssembly:
 
     def test_minor_arcana_card_validates_with_suit(self) -> None:
         raw = _make_raw_minor_card()
-        card, _ = normalize_card(raw, llm=None)
+        card, _, _ = normalize_card(raw, llm=None)
         assert card.suit == Suit.WANDS
         card.model_dump()
 
@@ -373,7 +373,7 @@ class TestAssembly:
                 }
             )
         )
-        card, _ = normalize_card(raw, llm=llm)
+        card, _, _ = normalize_card(raw, llm=llm)
         section_names = [s.section.value for s in card.sections]
         # overall should come before keywords, light before shadow, etc.
         assert section_names.index("overall") < section_names.index("keywords")
@@ -399,20 +399,20 @@ class TestProvenance:
                 }
             )
         )
-        card, prov = normalize_card(raw, llm=llm)
+        card, prov, _ = normalize_card(raw, llm=llm)
         for section in card.sections:
             assert section.section.value in prov.sections
 
     def test_provenance_sidecar_serialises(self) -> None:
         raw = _make_raw_card()
-        _, prov = normalize_card(raw, llm=None)
+        _, prov, _ = normalize_card(raw, llm=None)
         serialised = prov.model_dump_json()
         assert prov.card_id in serialised
         assert Provenance.DETERMINISTIC.value in serialised
 
     def test_provenance_is_frozen(self) -> None:
         raw = _make_raw_card()
-        _, prov = normalize_card(raw, llm=None)
+        _, prov, _ = normalize_card(raw, llm=None)
         assert isinstance(prov, CardProvenance)
         # Verify it's truly frozen (pydantic ConfigDict(frozen=True))
         with pytest.raises((TypeError, ValueError)):
@@ -428,14 +428,14 @@ class TestProvenance:
 class TestReport:
     def test_generate_report_contains_summary_header(self) -> None:
         raw = _make_raw_card()
-        card, prov = normalize_card(raw, llm=None)
+        card, prov, _ = normalize_card(raw, llm=None)
         report = generate_report([(card, prov)])
         assert "# Rider-Waite Normalisation Report" in report
         assert "Total cards:" in report
 
     def test_generate_report_contains_per_card_provenance(self) -> None:
         raw = _make_raw_card()
-        card, prov = normalize_card(raw, llm=None)
+        card, prov, _ = normalize_card(raw, llm=None)
         report = generate_report([(card, prov)])
         assert card.name in report
 
@@ -451,7 +451,7 @@ class TestReport:
                 }
             )
         )
-        card, prov = normalize_card(raw, llm=llm)
+        card, prov, _ = normalize_card(raw, llm=llm)
         report = generate_report([(card, prov)])
         assert "light" in report
         assert "keywords" in report
@@ -487,7 +487,7 @@ class TestReport:
 
     def test_generate_report_contains_empty_flag(self) -> None:
         raw = _make_raw_card()
-        card, prov = normalize_card(raw, llm=None)
+        card, prov, _ = normalize_card(raw, llm=None)
         report = generate_report([(card, prov)])
         # Keywords and overall are populated, but other sections should be empty
         assert "⚠️" in report
@@ -643,26 +643,26 @@ class TestReinforceOpposeResolution:
         raw = _make_raw_card(
             reinforcing_names=["The Magician", "The Empress"],
         )
-        card, _ = normalize_card(raw, llm=None)
+        card, _, _ = normalize_card(raw, llm=None)
         assert card.reinforcing_ids == ["the-magician", "the-empress"]
 
     def test_opposing_names_resolved_to_ids(self) -> None:
         raw = _make_raw_card(
             opposing_names=["The Devil", "The Tower"],
         )
-        card, _ = normalize_card(raw, llm=None)
+        card, _, _ = normalize_card(raw, llm=None)
         assert card.opposing_ids == ["the-devil", "the-tower"]
 
     def test_unresolvable_names_dropped_from_ids(self) -> None:
         raw = _make_raw_card(
             reinforcing_names=["The Fool", "Nonsense Card", "The Magician"],
         )
-        card, _ = normalize_card(raw, llm=None)
+        card, _, _ = normalize_card(raw, llm=None)
         assert card.reinforcing_ids == ["the-fool", "the-magician"]
 
     def test_empty_names_produce_empty_ids(self) -> None:
         raw = _make_raw_card()
-        card, _ = normalize_card(raw, llm=None)
+        card, _, _ = normalize_card(raw, llm=None)
         assert card.reinforcing_ids == []
         assert card.opposing_ids == []
 
@@ -671,6 +671,6 @@ class TestReinforceOpposeResolution:
             reinforcing_names=["The Star", "The Sun"],
             opposing_names=["The Moon"],
         )
-        card, _ = normalize_card(raw, llm=None)
+        card, _, _ = normalize_card(raw, llm=None)
         assert card.reinforcing_ids == ["the-star", "the-sun"]
         assert card.opposing_ids == ["the-moon"]

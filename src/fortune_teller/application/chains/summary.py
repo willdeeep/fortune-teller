@@ -91,8 +91,8 @@ def render_synergy_block(synergies: list[SynergyHit]) -> str:
     for hit in synergies:
         rel = "reinforce" if hit.effective == "reinforce" else "oppose"
         lines.append(
-            f"- {hit.card_id_a} ({hit.orientation_a.value}) and "
-            f"{hit.card_id_b} ({hit.orientation_b.value}): {rel}"
+            f"- {hit.card_name_a} ({hit.orientation_a.value}) and "
+            f"{hit.card_name_b} ({hit.orientation_b.value}): {rel}"
         )
     lines.append("")
     return "\n".join(lines)

@@ -204,4 +204,72 @@ def synthesize_deck_synergies(
             ids,
         )
 
+    # Write synergy report
+    report = _generate_synergy_report(results, deck_id=deck_id)
+    report_path = parsed_dir / deck_id / "_synergy_report.md"
+    report_path.write_text(report, encoding="utf-8")
+
     return results
+
+
+def _generate_synergy_report(
+    results: list[tuple[Card, CardProvenance]],
+    *,
+    deck_id: str = "book-of-thoth",
+) -> str:
+    """Generate a markdown synergy synthesis report.
+
+    Args:
+        results: List of ``(Card, CardProvenance)`` tuples from
+            :func:`synthesize_deck_synergies`.
+        deck_id: Deck identifier for the report header.
+
+    Returns:
+        A markdown string.
+    """
+    total = len(results)
+    synthesized_reinforce = sum(1 for card, _ in results if card.reinforcing_ids)
+    synthesized_oppose = sum(1 for card, _ in results if card.opposing_ids)
+
+    lines: list[str] = [
+        f"# {deck_id.replace('-', ' ').title()} Synergy Synthesis Report",
+        "",
+        f"**Total cards:** {total}",
+        f"**Cards with reinforcing IDs:** {synthesized_reinforce}",
+        f"**Cards with opposing IDs:** {synthesized_oppose}",
+        "",
+        "## Per-card provenance",
+        "",
+        "| Card | Reinforcing | Opposing |",
+        "|------|-------------|----------|",
+    ]
+
+    for card, prov in results:
+        rein_count = len(card.reinforcing_ids)
+        opp_count = len(card.opposing_ids)
+        rein_prov = prov.sections.get("reinforcing_ids", Provenance.DETERMINISTIC)
+        opp_prov = prov.sections.get("opposing_ids", Provenance.DETERMINISTIC)
+        rein_label = f"{rein_count} 🤖" if rein_prov == Provenance.SYNTHESIZED else f"{rein_count}"
+        opp_label = f"{opp_count} 🤖" if opp_prov == Provenance.SYNTHESIZED else f"{opp_count}"
+        lines.append(f"| {card.name} | {rein_label} | {opp_label} |")
+
+    lines.extend(
+        [
+            "",
+            "## Re-run",
+            "",
+            "To re-run individual cards:",
+            "",
+            "```bash",
+            "uv run ft-normalize-thoth --only <card-id>[,<card-id>,...]",
+            "```",
+            "",
+            "To re-run with local llama-server:",
+            "",
+            "```bash",
+            "uv run ft-normalize-thoth --provider local",
+            "```",
+        ]
+    )
+
+    return "\n".join(lines)
