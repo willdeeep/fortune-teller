@@ -9,6 +9,10 @@ so a release is created by tagging — there is no version field to bump.
 
 ## [Unreleased]
 
+_Nothing yet._
+
+## [0.6.0] — 2026-06-17
+
 ### Added
 
 - **Reinforce/Oppose domain model** — `Card.reinforcing_ids` / `opposing_ids`
