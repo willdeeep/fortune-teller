@@ -56,6 +56,8 @@ class CardSection(StrEnum):
     PROPOSAL = "proposal"
     CONFIRMATION = "confirmation"
     AFFIRMATION = "affirmation"
+    REINFORCING = "reinforcing"
+    OPPOSING = "opposing"
 
 
 class ChunkType(StrEnum):
@@ -90,6 +92,8 @@ class Card(BaseModel):
     suit: Suit | None = None  # None for major arcana
     number: int | None = None  # 0-21 major, 1-14 minor
     sections: list[CardSectionText] = Field(default_factory=list)
+    reinforcing_ids: list[str] = Field(default_factory=list)  # card IDs that amplify this card
+    opposing_ids: list[str] = Field(default_factory=list)  # card IDs that challenge this card
     source_url: HttpUrl
     image_url: str | None = None  # full-res artwork URL, parsed from page
 

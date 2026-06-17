@@ -9,6 +9,7 @@ from pydantic import HttpUrl
 from fortune_teller.application.chains.summary import (
     build_summary_chain,
     build_summary_context,
+    render_synergy_block,
     summary_prompt,
 )
 from fortune_teller.application.models.domain import (
@@ -18,6 +19,7 @@ from fortune_teller.application.models.domain import (
     Spread,
     SpreadPosition,
 )
+from fortune_teller.application.services.synergy import SynergyHit
 
 
 def _make_spread() -> Spread:
@@ -78,6 +80,7 @@ class TestSummaryPromptRenders:
             spread_name="New Moon Three-Card",
             card_summaries="Position 0 — Past: new beginning.",
             spread_description="Past: What has been.",
+            synergy_block="",
         )
         assert len(msgs) == 2
         assert msgs[0].type == "system"
@@ -88,6 +91,7 @@ class TestSummaryPromptRenders:
             spread_name="New Moon Three-Card",
             card_summaries="Position 0 — Past: new beginning.",
             spread_description="Past: What has been.",
+            synergy_block="",
         )
         assert "New Moon Three-Card" in msgs[1].content
 
@@ -96,6 +100,7 @@ class TestSummaryPromptRenders:
             spread_name="X",
             card_summaries="(no cards dealt yet)",
             spread_description="(no positions)",
+            synergy_block="",
         )
         assert "(no cards dealt yet)" in msgs[1].content
         assert "(no positions)" in msgs[1].content
@@ -119,6 +124,7 @@ class TestBuildSummaryChain:
                 "spread_name": "New Moon",
                 "card_summaries": "Position 0 — Past: x.",
                 "spread_description": "Past: y.",
+                "synergy_block": "",
             }
         )
         assert isinstance(result, str)
@@ -136,7 +142,12 @@ class TestBuildSummaryContext:
         spread = _make_spread()
         interps = [_make_interpretation(0, "Past"), _make_interpretation(1, "Present")]
         ctx = build_summary_context(interps, spread)
-        assert set(ctx.keys()) == {"spread_name", "card_summaries", "spread_description"}
+        assert set(ctx.keys()) == {
+            "spread_name",
+            "card_summaries",
+            "spread_description",
+            "synergy_block",
+        }
 
     def test_spread_name(self) -> None:
         spread = _make_spread()
@@ -196,3 +207,80 @@ class TestBuildSummaryContext:
         assert ctx["card_summaries"] == ""
         # spread_description is still populated
         assert "Past:" in ctx["spread_description"]
+
+    def test_synergy_block_empty_when_no_synergies(self) -> None:
+        spread = _make_spread()
+        ctx = build_summary_context([], spread, synergies=[])
+        assert ctx["synergy_block"] == ""
+
+    def test_synergy_block_empty_when_synergies_none(self) -> None:
+        spread = _make_spread()
+        ctx = build_summary_context([], spread, synergies=None)
+        assert ctx["synergy_block"] == ""
+
+    def test_synergy_block_rendered_with_hits(self) -> None:
+        spread = _make_spread()
+        interps = [_make_interpretation(0, "Past")]
+        hits = [
+            SynergyHit(
+                card_id_a="the-fool",
+                card_id_b="the-magician",
+                card_name_a="The Fool",
+                card_name_b="The Magician",
+                orientation_a=Orientation.UPRIGHT,
+                orientation_b=Orientation.REVERSED,
+                base="reinforce",
+                effective="oppose",
+            ),
+        ]
+        ctx = build_summary_context(interps, spread, synergies=hits)
+        assert "Card synergies:" in ctx["synergy_block"]
+        assert "The Fool" in ctx["synergy_block"]
+        assert "The Magician" in ctx["synergy_block"]
+        assert "oppose" in ctx["synergy_block"]
+
+
+# ---------------------------------------------------------------------------
+# render_synergy_block
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestRenderSynergyBlock:
+    def test_empty_list_returns_empty_string(self) -> None:
+        assert render_synergy_block([]) == ""
+
+    def test_single_reinforce_hit(self) -> None:
+        hits = [
+            SynergyHit(
+                card_id_a="the-fool",
+                card_id_b="the-magician",
+                card_name_a="The Fool",
+                card_name_b="The Magician",
+                orientation_a=Orientation.UPRIGHT,
+                orientation_b=Orientation.UPRIGHT,
+                base="reinforce",
+                effective="reinforce",
+            ),
+        ]
+        result = render_synergy_block(hits)
+        assert "Card synergies:" in result
+        assert "The Fool (upright)" in result
+        assert "The Magician (upright)" in result
+        assert "reinforce" in result
+
+    def test_oppose_hit_shows_oppose(self) -> None:
+        hits = [
+            SynergyHit(
+                card_id_a="the-fool",
+                card_id_b="the-tower",
+                card_name_a="The Fool",
+                card_name_b="The Tower",
+                orientation_a=Orientation.UPRIGHT,
+                orientation_b=Orientation.REVERSED,
+                base="oppose",
+                effective="reinforce",
+            ),
+        ]
+        result = render_synergy_block(hits)
+        assert "reinforce" in result

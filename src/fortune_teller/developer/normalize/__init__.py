@@ -1,1 +1,1 @@
-"""Rider-Waite normalisation — RawCard → Thoth-shaped Card."""
+"""Rider-Waite normalisation (RawCard → Card) and Thoth synergy synthesis."""

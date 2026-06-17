@@ -11,12 +11,45 @@ so a release is created by tagging — there is no version field to bump.
 
 _Nothing yet._
 
+## [0.6.0] — 2026-06-17
+
+### Added
+
+- **Reinforce/Oppose domain model** — `Card.reinforcing_ids` / `opposing_ids`
+  fields; `CardSection.REINFORCING` / `OPPOSING` enum values; orientation XOR
+  rule (`effective_relationship`): exactly one reversed card flips the
+  relationship (reinforce↔oppose).
+- **RW name→ID resolver** — `resolve_card_names()` normalises learntarot display
+  names (strips "The", maps digit ranks, singularises suits, overrides map) to
+  internal card IDs. Unresolvable names are logged and reported in
+  `_normalization_report.md`.
+- **Reading-time synergy** — `compute_synergies()` finds all reinforce/oppose
+  pairs among dealt cards; `render_synergy_block()` surfaces them in the summary
+  prompt using card display names; `ReadingService.finalize()` wires synergies
+  into the summary chain.
+- **Thoth reinforce/oppose LLM synthesis** — `synthesize_card_synergies()` and
+  `synthesize_deck_synergies()` use an LLM to synthesize reinforcing/opposing
+  card IDs for each Thoth card, with validation (max 5 per category,
+  self-reference removal, deck membership check). Writes `_synergy_report.md`.
+- **`ft-normalize-thoth`** CLI — `--provider`, `--model`, `--only`, `--no-llm`.
+- **`ft-normalize`** umbrella CLI — `--deck rw|thoth|all`, inherits other flags.
+
+### Fixed
+
+- **RW resolver silently dropped most references** — the initial
+  `resolve_card_names` used simple lowercase matching, which lost every
+  major-arcana reference (learntarot omits "The") and all numeric minors
+  ("2 of Wands" vs "Two of Wands"). Fixed with multi-step normalisation +
+  overrides map + unresolved-names reporting.
+
 ## [0.5.2] — 2026-06-16
 
 ### Added
+
 - This `CHANGELOG.md`, documenting the release history to date.
 
 ### Changed
+
 - **Roadmap re-prioritised** (README Roadmap table — the committed source of
   truth): **v0.6.0** Reinforce/Oppose synergy (orientation-aware; Thoth
   relationships LLM-backfilled) · **v0.7.0** UI improvement (framework
@@ -29,18 +62,21 @@ _Nothing yet._
 ## [0.5.1] — 2026-06-15
 
 ### Changed
+
 - **Automatic versioning** via `hatch-vcs`: the git tag is the single source of
   truth; `__version__` is read from package metadata. Removes manual
   version-file bumps and prior tag/`pyproject`/`__init__` drift. CI fetches full
   history/tags so the version resolves on build.
 
 ### Added
+
 - Quickstart instructions for creating a `.env` with `ANTHROPIC_API_KEY`
   (only needed for the `ft-normalize-rw` step).
 
 ## [0.5.0] — 2026-06-15
 
 ### Added
+
 - **Rider-Waite tarot deck** — a second deck, end to end: scrape
   (`learntarot.com`) → parse → LLM normalisation (Claude) → embed → index →
   card images.
@@ -50,12 +86,14 @@ _Nothing yet._
   `ft-fetch-images` covers every parsed deck.
 
 ### Fixed
+
 - Reading-history detail view crash — use gradio `SelectData.row_value`
   instead of the non-existent `.row`.
 
 ## [0.4.0] — 2026-06-14
 
 ### Added
+
 - **Interactive detail views** — a per-card/position detail panel showing the
   full structured entry, image, and source attribution.
 - UI overlay composing card artwork with the interpretation text.
@@ -63,6 +101,7 @@ _Nothing yet._
 ## [0.3.0] — 2026-06-14
 
 ### Added
+
 - **Card images** — scrape, store, and serve Book of Thoth artwork; basic
   image display alongside each card's interpretation (`ft-fetch-images`).
 
@@ -72,18 +111,21 @@ _Nothing yet._
 > (commit `71c3e81`) but was not tagged at the time.
 
 ### Added
+
 - **Reading history persistence (SQLite)** — readings are autosaved; a History
   tab lists past readings and shows their detail.
 
 ## [0.1.0] — 2026-06-13
 
 ### Added
+
 - **Fully-offline embeddings** — `ft-fetch-models` downloads the embedding model
   for offline use; runtime no longer contacts the HuggingFace Hub.
 
 ## [0.0.1-spike] — 2026-06-11
 
 ### Added
+
 - Initial spike: Book of Thoth deck (78 cards), New Moon three-card spread,
   auto-deal with no-replace, RAG per-card interpretations + a cross-card summary,
   local llama.cpp chat model, DuckDB (VSS) vector store, and a Gradio UI.

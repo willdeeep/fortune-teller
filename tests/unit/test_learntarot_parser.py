@@ -18,6 +18,7 @@ from fortune_teller.developer.parse.learntarot import (
     _RW_BASE_URL,
     _extract_image_url,
     parse_card_page,
+    resolve_card_names,
 )
 
 # ---------------------------------------------------------------------------
@@ -344,3 +345,81 @@ class TestExtractImageUrl:
         assert body is not None
         result = _extract_image_url(body, _RW_BASE_URL)
         assert result == "https://www.learntarot.com/bigjpgs/cups07.jpg"
+
+
+# ---------------------------------------------------------------------------
+# resolve_card_names
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestResolveCardNames:
+    """Tests for the name → ID resolution helper."""
+
+    def test_exact_name_match_returns_correct_id(self) -> None:
+        assert resolve_card_names(["The Fool"]) == (["the-fool"], [])
+
+    def test_case_insensitive_match(self) -> None:
+        assert resolve_card_names(["the fool"]) == (["the-fool"], [])
+
+    def test_unresolvable_name_is_skipped(self) -> None:
+        resolved, unresolved = resolve_card_names(["Non Existent Card"])
+        assert resolved == []
+        assert unresolved == ["Non Existent Card"]
+
+    def test_empty_list_returns_empty_tuple(self) -> None:
+        assert resolve_card_names([]) == ([], [])
+
+    def test_mixed_resolvable_and_unresolvable(self) -> None:
+        resolved, unresolved = resolve_card_names(["The Fool", "Nonsense Card", "The Magician"])
+        assert resolved == ["the-fool", "the-magician"]
+        assert unresolved == ["Nonsense Card"]
+
+    def test_pip_card_resolved(self) -> None:
+        assert resolve_card_names(["Two of Wands"]) == (["two-of-wands"], [])
+
+    def test_court_card_resolved(self) -> None:
+        assert resolve_card_names(["Page of Cups"]) == (["page-of-cups"], [])
+
+    def test_stripped_whitespace_handled(self) -> None:
+        assert resolve_card_names(["  The Fool  "]) == (["the-fool"], [])
+
+    # ------------------------------------------------------------------
+    # Learntarot-specific name forms
+    # ------------------------------------------------------------------
+
+    def test_major_without_the_prefix_magician(self) -> None:
+        """Major arcana names without 'The' prefix — 'Magician'."""
+        assert resolve_card_names(["Magician"]) == (["the-magician"], [])
+
+    def test_major_without_the_prefix_devil(self) -> None:
+        assert resolve_card_names(["Devil"]) == (["the-devil"], [])
+
+    def test_major_without_the_prefix_star(self) -> None:
+        assert resolve_card_names(["Star"]) == (["the-star"], [])
+
+    def test_major_without_the_prefix_hierophant(self) -> None:
+        assert resolve_card_names(["Hierophant"]) == (["the-hierophant"], [])
+
+    def test_digit_rank_two_of_wands(self) -> None:
+        """Pip card with digit rank — '2 of Wands'."""
+        assert resolve_card_names(["2 of Wands"]) == (["two-of-wands"], [])
+
+    def test_digit_rank_seven_of_cups(self) -> None:
+        assert resolve_card_names(["7 of Cups"]) == (["seven-of-cups"], [])
+
+    def test_court_card_page_of_cups_matches_as_is(self) -> None:
+        """Court card 'Page of Cups' should match as-is."""
+        assert resolve_card_names(["Page of Cups"]) == (["page-of-cups"], [])
+
+    def test_nonsense_card_is_unresolved(self) -> None:
+        """An unrecognised name lands in the second element."""
+        resolved, unresolved = resolve_card_names(["Nonsense Card"])
+        assert resolved == []
+        assert unresolved == ["Nonsense Card"]
+
+    def test_mixed_the_fool_magician_and_nonsense(self) -> None:
+        """Mixed resolvable and unresolvable in a single call."""
+        resolved, unresolved = resolve_card_names(["The Fool", "Magician", "Nonsense"])
+        assert resolved == ["the-fool", "the-magician"]
+        assert unresolved == ["Nonsense"]
