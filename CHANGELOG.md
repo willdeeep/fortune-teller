@@ -9,6 +9,10 @@ so a release is created by tagging — there is no version field to bump.
 
 ## [Unreleased]
 
+_Nothing yet._
+
+## [0.6.1] — 2026-06-17
+
 ### Changed
 
 - **Untracked `.opencode/opencode.json`** — removed local editor config from
