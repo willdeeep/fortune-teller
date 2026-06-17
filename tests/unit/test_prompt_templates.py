@@ -68,6 +68,7 @@ def _full_summary_dict() -> dict[str, str]:
         "spread_name": _SPREAD_NAME,
         "card_summaries": "Position 0 — Past (The Fool, upright):\nBeginnings.",
         "spread_description": _SPREAD_DESCRIPTION,
+        "synergy_block": "",
     }
 
 
@@ -144,7 +145,7 @@ class TestSummaryPromptTemplate:
     """Render and structural tests for :data:`summary_prompt`."""
 
     _REQUIRED_KEYS: ClassVar[frozenset[str]] = frozenset(
-        {"spread_name", "card_summaries", "spread_description"}
+        {"spread_name", "card_summaries", "spread_description", "synergy_block"}
     )
 
     def test_is_a_chat_prompt_template(self) -> None:
@@ -226,13 +227,14 @@ class TestPromptContextBuildersMatchTemplates:
     def test_summary_context_keys_match_prompt_placeholders(self) -> None:
         """``build_summary_context`` keys are exactly what ``summary_prompt`` needs."""
         prompt_vars = set(summary_prompt.input_variables)
-        expected = {"spread_name", "card_summaries", "spread_description"}
+        expected = {"spread_name", "card_summaries", "spread_description", "synergy_block"}
         assert prompt_vars == expected
         sig = inspect.signature(build_summary_context)
         required_params = [
             p for p in sig.parameters.values() if p.default is inspect.Parameter.empty
         ]
         # 2 required positional args: interpretations, spread
+        # (synergies is optional with default None)
         assert len(required_params) == 2
 
 
