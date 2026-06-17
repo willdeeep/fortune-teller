@@ -9,7 +9,19 @@ so a release is created by tagging — there is no version field to bump.
 
 ## [Unreleased]
 
-_Nothing yet._
+### Changed
+
+- **Untracked `.opencode/opencode.json`** — removed local editor config from
+  version control (`git rm --cached`); the `.gitignore` `.opencode` rule keeps
+  `.opencode/` and `.claude/` out going forward. A `.gitignore` rule can only
+  ignore files git is *not already tracking*, so the file had to be untracked
+  explicitly. Dropped the redundant `.opencode/*` ignore line.
+
+### Added
+
+- **`ft-normalize-rw` CLI test coverage** — `tests/unit/test_normalize_cli.py`
+  covers the `developer/normalize/cli.py` entry point (provider/no-llm/only
+  flags + missing-raw-dir exit), taking it from 0% to 100%.
 
 ## [0.6.0] — 2026-06-17
 
