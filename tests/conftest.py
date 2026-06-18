@@ -32,6 +32,10 @@ from fortune_teller.application.models.domain import (
 )
 from fortune_teller.application.stores.embeddings import Embedder
 
+# Load the NiceGUI ``User`` simulation fixtures (headless — no Selenium).  This
+# provides the ``user`` fixture used by the NiceGUI UI interaction tests.
+pytest_plugins = ["nicegui.testing.user_plugin"]
+
 # ---------------------------------------------------------------------------
 # Paths
 # ---------------------------------------------------------------------------

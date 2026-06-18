@@ -1,26 +1,36 @@
 """Unit tests for the NiceGUI UI module.
 
-Covers the framework-agnostic formatting functions, the streaming
-generator, and the ``build_app`` dependency wiring (module-state and
-static-mount registration).
+Covers three layers:
 
-NOTE: the NiceGUI page/interaction layer (``reading_page``, ``_run_reading``,
-the card-detail ``ui.dialog``, and the history section) is not yet exercised
-here — those need ``nicegui.testing`` ``User`` fixtures (requires
-``pytest-asyncio``). See plan 0035 DoD.
+- the framework-agnostic formatters and the streaming generator;
+- the ``build_app`` dependency wiring (module-state + static-mount); and
+- the page/interaction layer (``reading_page``, ``_run_reading``,
+  ``_show_detail``, the card-detail ``ui.dialog``, and the history section),
+  driven headlessly by the ``nicegui.testing`` ``User`` fixture against the
+  stub app in ``tests/nicegui_main.py``.
+
+The ``main()`` entry point is covered separately with its heavy dependencies
+mocked.
 """
 
 from __future__ import annotations
 
+import sys
 import uuid
+from collections.abc import Iterator
 from pathlib import Path
 from typing import ClassVar
 from uuid import UUID
 
 import pytest
+from nicegui import ui
+from nicegui.testing import User
 from pydantic import HttpUrl
 
+import fortune_teller.application.services.reading as reading_mod
+import fortune_teller.application.stores.sqlite as sqlite_mod
 import fortune_teller.application.ui.nicegui_app as nicegui_app_module
+from fortune_teller.application.config import settings
 from fortune_teller.application.models.domain import (
     Arcana,
     Card,
@@ -121,6 +131,10 @@ class _StubReadingService:
         self._embedder = None
         self._counter = 0
 
+    @property
+    def deck_id(self) -> str:
+        return self._deck.id
+
     def start(self, seed: int | None = None) -> ReadingHandle:  # noqa: ARG002
         from fortune_teller.application.services.deck import (  # noqa: PLC0415
             DeckSession,
@@ -205,6 +219,28 @@ class _StubHistoryStore:
 def stub_service() -> _StubReadingService:
     _StubChain.inputs_received = []
     return _StubReadingService(deck=_make_deck(5), spread=_make_spread(3))
+
+
+@pytest.fixture(autouse=True)
+def _restore_fortune_teller_modules() -> Iterator[None]:
+    """Restore ``fortune_teller.*`` in ``sys.modules`` after each test.
+
+    NiceGUI's ``User`` simulation resets the global app on teardown and, as part
+    of that, pops the page module *and all its parent packages* from
+    ``sys.modules`` (so a ``runpy`` re-import re-registers pages next time). For
+    ``fortune_teller.application.ui.nicegui_app`` that evicts the whole
+    ``fortune_teller`` tree, which would break later test files that patch or
+    re-import those modules. Re-instating the original module objects afterwards
+    keeps object identity consistent across the suite.
+    """
+    snapshot = {
+        name: mod
+        for name, mod in sys.modules.items()
+        if name == "fortune_teller" or name.startswith("fortune_teller.")
+    }
+    yield
+    for name, mod in snapshot.items():
+        sys.modules.setdefault(name, mod)
 
 
 # ---------------------------------------------------------------------------
@@ -647,3 +683,120 @@ class TestBuildApp:
     def test_build_app_without_images_dir(self, stub_service: _StubReadingService) -> None:
         build_app(stub_service, images_dir=None)
         assert nicegui_app_module._images_dir is None
+
+
+# ---------------------------------------------------------------------------
+# NiceGUI page / interaction tests (nicegui.testing User simulation)
+#
+# These drive the real reading_page / _run_reading / _show_detail / history
+# wiring against the in-process stub app defined in tests/nicegui_main.py.
+# ---------------------------------------------------------------------------
+
+_MAIN = "tests/nicegui_main.py"
+
+
+@pytest.mark.unit
+@pytest.mark.nicegui_main_file(_MAIN)
+class TestReadingPage:
+    async def test_page_renders_title_deck_and_spread(self, user: User) -> None:
+        await user.open("/")
+        await user.should_see("Fortune Teller")
+        await user.should_see("Test Spread")
+        await user.should_see("Test Deck")
+
+    async def test_position_titles_render(self, user: User) -> None:
+        await user.open("/")
+        await user.should_see("Position 0")
+        await user.should_see("Position 2")
+
+    async def test_new_reading_button_present(self, user: User) -> None:
+        await user.open("/")
+        await user.should_see("New Reading")
+
+    async def test_new_reading_deals_cards_and_summary(self, user: User) -> None:
+        await user.open("/")
+        user.find("New Reading").click()
+        # The stub deck names cards "Card 00".."Card 04"; a 3-card spread deals
+        # three of them, each panel carrying an orientation arrow + summary.
+        await user.should_see("UPRIGHT")
+        await user.should_see("Summary")
+
+
+@pytest.mark.unit
+@pytest.mark.nicegui_main_file(_MAIN)
+class TestDetailDialog:
+    async def test_detail_button_before_reading_shows_placeholder(self, user: User) -> None:
+        await user.open("/")
+        user.find("📋 Position 0").click()
+        await user.should_see("No card dealt")
+
+    async def test_detail_dialog_shows_card_detail_after_reading(self, user: User) -> None:
+        await user.open("/")
+        user.find("New Reading").click()
+        await user.should_see("Summary")
+        user.find("📋 Position 0").click()
+        # Stub cards have no sections, so the detail renders the fallback plus
+        # the source-attribution link.
+        await user.should_see("No structured data")
+        await user.should_see("View source")
+
+
+@pytest.mark.unit
+@pytest.mark.nicegui_main_file(_MAIN)
+class TestHistorySection:
+    async def test_history_section_renders_seeded_reading(self, user: User) -> None:
+        await user.open("/")
+        await user.should_see("History")
+        # Quasar renders table cells client-side, so assert the table element is
+        # present rather than its row text.
+        await user.should_see(kind=ui.table)
+
+    async def test_refresh_button_does_not_error(self, user: User) -> None:
+        await user.open("/")
+        user.find("Refresh").click()
+        await user.should_see("History")
+
+
+# ---------------------------------------------------------------------------
+# main() — console-script entry point (heavy deps mocked)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestMain:
+    def test_main_builds_app_and_runs(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+        stub_service: _StubReadingService,
+    ) -> None:
+        class _FakeStore:
+            opened = False
+            closed = False
+
+            def __init__(self, _path: object) -> None:
+                pass
+
+            def open(self) -> None:
+                _FakeStore.opened = True
+
+            def close(self) -> None:
+                _FakeStore.closed = True
+
+        monkeypatch.setattr(sqlite_mod, "SQLiteStore", _FakeStore)
+        monkeypatch.setattr(
+            reading_mod,
+            "build_reading_service",
+            lambda *_args, **_kwargs: stub_service,
+        )
+        monkeypatch.setattr(settings, "images_dir", tmp_path)
+
+        ran: dict[str, object] = {}
+        monkeypatch.setattr(nicegui_app_module.ui, "run", lambda **kwargs: ran.update(kwargs))
+
+        nicegui_app_module.main()
+
+        assert _FakeStore.opened is True
+        assert ran["port"] == 7860
+        assert ran["title"] == "Fortune Teller"
+        assert nicegui_app_module._service is stub_service

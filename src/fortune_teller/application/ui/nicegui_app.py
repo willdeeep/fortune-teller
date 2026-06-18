@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 from uuid import UUID
 
-from nicegui import app, ui
+from nicegui import Client, app, ui
 
 from fortune_teller.application.stores.images import image_path_for
 
@@ -251,8 +251,15 @@ def build_app(
     if images_dir is not None and images_dir.is_dir():
         app.add_static_files("/images", str(images_dir))
 
+    # Register the index page here (not as a module-level decorator) so that
+    # the route is (re)created against whatever NiceGUI app is current — this is
+    # what lets the ``nicegui.testing`` ``User`` simulation, which resets the
+    # global app between tests, re-register the page on each run.  Idempotent:
+    # repeated ``build_app`` calls within one process register the route once.
+    if reading_page not in Client.page_routes:
+        ui.page("/")(reading_page)
 
-@ui.page("/")
+
 async def reading_page() -> None:
     """Build the reading + history UI per client connection."""
     if _service is None:
