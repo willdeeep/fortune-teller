@@ -473,7 +473,7 @@ requires-dist = [
     { name = "langchain-core", specifier = ">=0.3" },
     { name = "langchain-huggingface", specifier = ">=0.1" },
     { name = "langchain-openai", specifier = ">=0.2" },
-    { name = "nicegui", specifier = ">=2.0" },
+    { name = "nicegui", specifier = ">=3.0" },
     { name = "platformdirs", specifier = ">=4.2" },
     { name = "pydantic", specifier = ">=2.7" },
     { name = "pydantic-settings", specifier = ">=2.4" },
