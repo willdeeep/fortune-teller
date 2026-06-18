@@ -1,8 +1,13 @@
 """Unit tests for the NiceGUI UI module.
 
-Tests the framework-agnostic formatting functions and the
-NiceGUI-specific wiring (build_app, detail dialog, history section).
-NiceGUI's ``User`` fixture drives the browser-like interaction tests.
+Covers the framework-agnostic formatting functions, the streaming
+generator, and the ``build_app`` dependency wiring (module-state and
+static-mount registration).
+
+NOTE: the NiceGUI page/interaction layer (``reading_page``, ``_run_reading``,
+the card-detail ``ui.dialog``, and the history section) is not yet exercised
+here — those need ``nicegui.testing`` ``User`` fixtures (requires
+``pytest-asyncio``). See plan 0035 DoD.
 """
 
 from __future__ import annotations
