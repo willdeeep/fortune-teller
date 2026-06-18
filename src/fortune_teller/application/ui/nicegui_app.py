@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import asyncio
 import atexit
-from collections.abc import Iterator
 from pathlib import Path
 from typing import TYPE_CHECKING
 from uuid import UUID
@@ -157,47 +156,6 @@ def _load_history_list(history_store: HistoryStore) -> list[list[str]]:
         cards_str = ", ".join(item.card_names)
         rows.append([str(item.id), date_str, item.spread_id, cards_str, item.summary_preview])
     return rows
-
-
-# ---------------------------------------------------------------------------
-# Streaming generator (kept for backwards compatibility)
-# ---------------------------------------------------------------------------
-
-
-def run_reading_generator(
-    reading_service: ReadingService,
-    images_dir: Path | None = None,
-) -> Iterator[tuple[str | None, ...]]:
-    """Run one full reading, yielding a UI snapshot after each card.
-
-    Each yield produces a tuple of ``(img_0, …, img_N, panel_0, …, panel_N, summary)``.
-    Image slots are ``None`` when not yet dealt or when no image file exists.
-    Text panel slots are ``""`` until the corresponding card is dealt.
-    The summary slot is ``""`` until all cards are interpreted.
-    """
-    handle = reading_service.start()
-    positions = reading_service._spread.positions
-    n = len(positions)
-    panels: list[str] = [""] * n
-    images: list[str | None] = [None] * n
-    summary = ""
-
-    for i, pos in enumerate(positions):
-        interp = reading_service.deal_next(handle)
-        panels[i] = _format_card_text(
-            card_name=interp.card_name,
-            orientation=interp.dealt.orientation.value,
-            text=interp.text,
-            position_name=pos.name,
-            position_meaning=pos.meaning,
-        )
-        if images_dir is not None:
-            img_path = image_path_for(interp.dealt.card_id, images_dir)
-            images[i] = str(img_path) if img_path is not None else None
-        yield (*images, *panels, summary)
-
-    reading = reading_service.finalize(handle)
-    yield (*images, *panels, reading.summary)
 
 
 # ---------------------------------------------------------------------------

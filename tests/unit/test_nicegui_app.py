@@ -2,7 +2,7 @@
 
 Covers three layers:
 
-- the framework-agnostic formatters and the streaming generator;
+- the framework-agnostic formatters;
 - the ``build_app`` dependency wiring (module-state + static-mount); and
 - the page/interaction layer (``reading_page``, ``_run_reading``,
   ``_show_detail``, the card-detail ``ui.dialog``, and the history section),
@@ -57,7 +57,6 @@ from fortune_teller.application.ui.nicegui_app import (
     _format_reading_detail,
     _history_rows,
     build_app,
-    run_reading_generator,
 )
 
 # ---------------------------------------------------------------------------
@@ -394,103 +393,6 @@ class TestFormatPositionInfo:
     def test_includes_source_link(self) -> None:
         result = _format_position_info("Present", "Current energy.", "https://example.test/spread")
         assert "[Source ↗](https://example.test/spread)" in result
-
-
-# ---------------------------------------------------------------------------
-# run_reading_generator (framework-agnostic)
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.unit
-class TestRunReadingGenerator:
-    def test_yields_one_snapshot_per_card_plus_one_for_summary(
-        self,
-        stub_service: _StubReadingService,
-    ) -> None:
-        snapshots = list(run_reading_generator(stub_service))
-        assert len(snapshots) == 4
-
-    def test_each_snapshot_has_one_more_panel_filled(
-        self,
-        stub_service: _StubReadingService,
-    ) -> None:
-        snapshots = list(run_reading_generator(stub_service))
-        n = 3
-        s0 = snapshots[0]
-        assert s0[0] is None and s0[1] is None and s0[2] is None
-        assert s0[n] != ""
-        assert s0[n + 1] == "" and s0[n + 2] == ""
-        assert s0[-1] == ""
-        s1 = snapshots[1]
-        assert s1[n] != "" and s1[n + 1] != ""
-        assert s1[n + 2] == ""
-        s2 = snapshots[2]
-        assert s2[n] != "" and s2[n + 1] != "" and s2[n + 2] != ""
-        assert s2[-1] == ""
-        s3 = snapshots[3]
-        assert s3[n] != "" and s3[n + 1] != "" and s3[n + 2] != ""
-        assert s3[-1] != ""
-
-    def test_panels_carry_card_name_and_orientation(
-        self,
-        stub_service: _StubReadingService,
-    ) -> None:
-        snapshots = list(run_reading_generator(stub_service))
-        n = 3
-        final = snapshots[-1]
-        panel_start = n
-        for i in range(n):
-            panel = final[panel_start + i]
-            assert "▲ UPRIGHT" in panel or "▼ REVERSED" in panel
-
-    def test_summary_includes_text_from_summary_chain(
-        self,
-        stub_service: _StubReadingService,
-    ) -> None:
-        snapshots = list(run_reading_generator(stub_service))
-        assert "SUMMARY#1" in snapshots[-1][-1]
-
-    def test_each_deal_uses_a_different_card(
-        self,
-        stub_service: _StubReadingService,
-    ) -> None:
-        snapshots = list(run_reading_generator(stub_service))
-        n = 3
-        panel_start = n
-        assert stub_service._per_card_chain.invocations == 3
-        newest_panel_per_snapshot = [
-            s[panel_start + len([p for p in s[panel_start : panel_start + n] if p]) - 1]
-            for s in snapshots[:n]
-        ]
-        card_names = [p.split("\n")[0] for p in newest_panel_per_snapshot]
-        assert len(set(card_names)) == 3
-
-    def test_image_slot_paths_resolved_from_images_dir(
-        self,
-        stub_service: _StubReadingService,
-        tmp_path: Path,
-    ) -> None:
-        deck_dir = tmp_path / "test-deck"
-        deck_dir.mkdir()
-        (deck_dir / "card-00.png").write_bytes(b"fake")
-        (deck_dir / "card-01.png").write_bytes(b"fake")
-        (deck_dir / "card-02.png").write_bytes(b"fake")
-
-        snapshots = list(run_reading_generator(stub_service, images_dir=deck_dir))
-        for snapshot in snapshots:
-            first_image = snapshot[0]
-            if first_image is not None:
-                assert str(deck_dir) in first_image
-
-    def test_image_slots_are_none_when_no_images_dir(
-        self,
-        stub_service: _StubReadingService,
-    ) -> None:
-        snapshots = list(run_reading_generator(stub_service))
-        for snapshot in snapshots:
-            assert snapshot[0] is None
-            assert snapshot[1] is None
-            assert snapshot[2] is None
 
 
 # ---------------------------------------------------------------------------
