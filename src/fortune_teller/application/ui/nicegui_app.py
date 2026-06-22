@@ -23,6 +23,11 @@ Plan 0024 adds:
   :func:`_format_position_info`).
 - Reinforcing/opposing synergy references in the card-detail dialog
   (rendered in :func:`_format_card_detail` when *cards_by_id* is supplied).
+
+Plan 0025 adds:
+- Reversed cards display their artwork rotated 180° via CSS
+  ``transform:rotate(180deg)`` on the image element (see
+  :func:`rotation_style`), applied in :func:`_run_reading`.
 """
 
 from __future__ import annotations
@@ -36,6 +41,7 @@ from uuid import UUID
 
 from nicegui import Client, app, ui
 
+from fortune_teller.application.models.domain import Orientation
 from fortune_teller.application.stores.images import image_path_for
 
 if TYPE_CHECKING:
@@ -54,6 +60,19 @@ _cards_by_id: dict[str, Card] = {}
 _spread_options: list[tuple[str, str]] = []
 _service_factory: Callable[[str], ReadingService] | None = None
 _service_cache: dict[str, ReadingService] = {}
+
+
+# ---------------------------------------------------------------------------
+# Framework-agnostic helpers
+# ---------------------------------------------------------------------------
+
+
+def rotation_style(orientation: Orientation) -> str:
+    """Return a CSS transform string to rotate reversed card art 180°.
+
+    Returns an empty string for upright cards so no transform is applied.
+    """
+    return "transform: rotate(180deg);" if orientation is Orientation.REVERSED else ""
 
 
 # ---------------------------------------------------------------------------
@@ -576,6 +595,13 @@ async def _run_reading(
                 card_images[i].set_source(url).classes(remove="hidden")
             else:
                 card_images[i].set_source("").classes("hidden")
+
+            # Apply 180° rotation for reversed cards (plan 0025).
+            rot = rotation_style(interp.dealt.orientation)
+            if rot:
+                card_images[i].style(rot)
+            else:
+                card_images[i].style.pop("transform", None)
 
             current = state.get("dealt_ids")
             if current is not None:
