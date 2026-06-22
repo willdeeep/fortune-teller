@@ -9,6 +9,16 @@ so a release is created by tagging — there is no version field to bump.
 
 ## [Unreleased]
 
+### Added
+
+- **Complex spreads + Celtic Cross** (plan 0030) — `SpreadPosition` gains
+  optional `row`/`col`/`rotation` layout fields (linear row layout when absent).
+  The NiceGUI UI renders 2D spreads via a CSS grid (with a 90°-rotated crossing
+  card) and gains a spread selector (`ui.select`) so readers can switch spreads;
+  `list_spreads` exposes `(id, name)` options and a service factory builds a
+  reading service per spread. Ships the authored `celtic-cross.json` spread
+  (10 positions).
+
 ### Changed
 
 - **UI migrated from Gradio to NiceGUI** (plan 0035) — the `fortune-teller`
