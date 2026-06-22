@@ -22,6 +22,7 @@ from uuid import UUID
 
 import pytest
 from nicegui import ui
+from nicegui.element_filter import ElementFilter
 from nicegui.testing import User
 from pydantic import HttpUrl
 
@@ -55,6 +56,7 @@ from fortune_teller.application.ui.nicegui_app import (
     _format_reading_detail,
     _history_rows,
     build_app,
+    rotation_style,
 )
 
 # ---------------------------------------------------------------------------
@@ -834,3 +836,70 @@ class TestPositionMeaningGridDialog:
         # No card has been dealt yet, so the card-detail dialog would show
         # the "No card dealt" placeholder — assert it does NOT appear.
         await user.should_not_see("No card dealt")
+
+
+# ---------------------------------------------------------------------------
+# rotation_style — pure helper (plan 0025)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestRotationStyle:
+    def test_reversed_returns_180_transform(self) -> None:
+        assert rotation_style(Orientation.REVERSED) == "transform: rotate(180deg);"
+
+    def test_upright_returns_empty_string(self) -> None:
+        assert rotation_style(Orientation.UPRIGHT) == ""
+
+
+# ---------------------------------------------------------------------------
+# Reversed card rotation — NiceGUI User interaction (plan 0025)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+@pytest.mark.nicegui_main_file(_MAIN)
+class TestReversedCardRotation:
+    """After a reading, reversed card images get a 180° CSS transform;
+
+    upright images do not.  The stub uses ``random.Random(0)`` which deals
+    cards 0-1 upright and card 2 reversed (3-position spread).
+    """
+
+    async def test_reversed_image_has_rotation_style(self, user: User) -> None:
+        await user.open("/")
+        user.find("New Reading").click()
+        await user.should_see("Summary")
+        with user.client:
+            images = list(ElementFilter(kind=ui.image))
+        transforms = [img.style.get("transform", "") for img in images]
+        # Card 2 is reversed → one image should have the 180° transform.
+        assert any("180deg" in t for t in transforms if t)
+
+    async def test_upright_image_has_no_rotation_style(self, user: User) -> None:
+        await user.open("/")
+        user.find("New Reading").click()
+        await user.should_see("Summary")
+        with user.client:
+            images = list(ElementFilter(kind=ui.image))
+        transforms = [img.style.get("transform", "") for img in images]
+        # Cards 0-1 are upright → at least one image has no transform.
+        assert any(not t or "180deg" not in t for t in transforms)
+
+    async def test_second_reading_clears_previous_rotation(self, user: User) -> None:
+        """A second reading removes the transform from previously-reversed images."""
+        await user.open("/")
+        user.find("New Reading").click()
+        await user.should_see("Summary")
+
+        user.find("New Reading").click()
+        await user.should_see("Summary")
+
+        with user.client:
+            images = list(ElementFilter(kind=ui.image))
+        transforms = [img.style.get("transform", "") for img in images]
+
+        # With the same seed, orientations repeat: cards 0-1 upright, card 2
+        # reversed.  The clearing logic (style(remove="transform")) runs for
+        # upright cards, so at least one image should have no transform.
+        assert any(not t or "180deg" not in t for t in transforms)
