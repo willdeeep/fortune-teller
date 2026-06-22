@@ -15,9 +15,7 @@ mocked.
 
 from __future__ import annotations
 
-import sys
 import uuid
-from collections.abc import Iterator
 from pathlib import Path
 from typing import ClassVar
 from uuid import UUID
@@ -218,28 +216,6 @@ class _StubHistoryStore:
 def stub_service() -> _StubReadingService:
     _StubChain.inputs_received = []
     return _StubReadingService(deck=_make_deck(5), spread=_make_spread(3))
-
-
-@pytest.fixture(autouse=True)
-def _restore_fortune_teller_modules() -> Iterator[None]:
-    """Restore ``fortune_teller.*`` in ``sys.modules`` after each test.
-
-    NiceGUI's ``User`` simulation resets the global app on teardown and, as part
-    of that, pops the page module *and all its parent packages* from
-    ``sys.modules`` (so a ``runpy`` re-import re-registers pages next time). For
-    ``fortune_teller.application.ui.nicegui_app`` that evicts the whole
-    ``fortune_teller`` tree, which would break later test files that patch or
-    re-import those modules. Re-instating the original module objects afterwards
-    keeps object identity consistent across the suite.
-    """
-    snapshot = {
-        name: mod
-        for name, mod in sys.modules.items()
-        if name == "fortune_teller" or name.startswith("fortune_teller.")
-    }
-    yield
-    for name, mod in snapshot.items():
-        sys.modules.setdefault(name, mod)
 
 
 # ---------------------------------------------------------------------------

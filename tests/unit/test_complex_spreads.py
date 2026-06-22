@@ -11,11 +11,20 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from nicegui import ui
+from nicegui.testing import User
 from pydantic import HttpUrl
 
+import fortune_teller.application.ui.nicegui_app as nicegui_app_module
 from fortune_teller.application.models.domain import Spread, SpreadPosition
 from fortune_teller.application.services.loading import list_spread_ids, list_spreads
-from fortune_teller.application.ui.nicegui_app import _grid_dimensions, _has_grid_layout
+from fortune_teller.application.ui.nicegui_app import (
+    _grid_dimensions,
+    _has_grid_layout,
+    _resolve_service,
+    build_app,
+)
+from tests.unit.test_nicegui_app import _make_deck, _make_spread, _StubReadingService
 
 _SPREAD_URL = "https://example.test/spread"
 
@@ -172,3 +181,91 @@ class TestLayoutHelpers:
         rows, cols = _grid_dimensions(positions)
         assert rows == 1
         assert cols == 1
+
+
+# ---------------------------------------------------------------------------
+# _resolve_service (spread → service resolution + caching)
+# ---------------------------------------------------------------------------
+
+
+def _grid_service() -> _StubReadingService:
+    spread = Spread(
+        id="grid-spread",
+        name="Grid",
+        positions=[_make_position(0, row=0, col=0), _make_position(1, row=0, col=1)],
+    )
+    return _StubReadingService(deck=_make_deck(6), spread=spread)
+
+
+@pytest.mark.unit
+class TestResolveService:
+    def test_returns_default_when_id_matches(self) -> None:
+        svc = _grid_service()
+        build_app(svc)
+        assert _resolve_service("grid-spread") is svc
+
+    def test_uses_factory_for_other_spread(self) -> None:
+        other = _StubReadingService(deck=_make_deck(6), spread=_make_spread(3))
+        build_app(_grid_service(), service_factory=lambda _sid: other)
+        assert _resolve_service("test-spread") is other
+
+    def test_caches_factory_result(self) -> None:
+        calls: list[str] = []
+
+        def factory(sid: str) -> _StubReadingService:
+            calls.append(sid)
+            return _StubReadingService(deck=_make_deck(6), spread=_make_spread(3))
+
+        build_app(_grid_service(), service_factory=factory)  # type: ignore[arg-type]
+        first = _resolve_service("test-spread")
+        second = _resolve_service("test-spread")
+        assert first is second
+        assert calls == ["test-spread"]
+
+    def test_falls_back_to_default_without_factory(self) -> None:
+        default = _grid_service()
+        build_app(default)
+        assert _resolve_service("unknown-spread") is default
+
+    def test_raises_when_no_service(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(nicegui_app_module, "_service", None)
+        monkeypatch.setattr(nicegui_app_module, "_service_factory", None)
+        monkeypatch.setattr(nicegui_app_module, "_service_cache", {})
+        with pytest.raises(RuntimeError):
+            _resolve_service("anything")
+
+
+# ---------------------------------------------------------------------------
+# Grid layout + spread selector (nicegui.testing User simulation)
+# ---------------------------------------------------------------------------
+
+_GRID_MAIN = "tests/nicegui_grid_main.py"
+
+
+@pytest.mark.unit
+@pytest.mark.nicegui_main_file(_GRID_MAIN)
+class TestGridLayoutUI:
+    async def test_grid_renders_all_position_labels(self, user: User) -> None:
+        await user.open("/")
+        for name in ("Center", "Crossing", "Right", "Below"):
+            await user.should_see(name)
+
+    async def test_spread_selector_present(self, user: User) -> None:
+        await user.open("/")
+        await user.should_see(kind=ui.select)
+
+    async def test_new_reading_deals_in_grid(self, user: User) -> None:
+        await user.open("/")
+        user.find("New Reading").click()
+        await user.should_see("UPRIGHT")
+        await user.should_see("Summary")
+
+    async def test_switching_to_row_spread_rebuilds_layout(self, user: User) -> None:
+        await user.open("/")
+        await user.should_see("Center")  # grid layout active
+        # Picking the other spread fires on_value_change → rebuild.
+        select = next(iter(user.find(ui.select).elements))
+        select.set_value("test-spread")
+        # Row layout (no grid hints) renders the per-position detail buttons.
+        await user.should_see("📋 Position 0")
+        await user.should_see("Test Spread")  # title updated to the new spread

@@ -339,7 +339,10 @@ async def reading_page() -> None:
             title_md.set_content(f"# Fortune Teller\n### {current_spread.name} · {svc._deck.name}")
             rebuild_card_panels()
 
-        spread_select.on("update:model-value", on_spread_change)
+        # ``on_value_change`` fires whenever the selected value changes (user
+        # pick or programmatic), which is what we want and is reliably driven by
+        # the test harness; the raw "update:model-value" client event is not.
+        spread_select.on_value_change(lambda _e: on_spread_change())
 
     summary_md = ui.markdown()
     new_reading_btn = ui.button("New Reading", color="primary")
