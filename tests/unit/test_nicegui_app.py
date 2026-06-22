@@ -886,20 +886,27 @@ class TestReversedCardRotation:
         # Cards 0-1 are upright → at least one image has no transform.
         assert any(not t or "180deg" not in t for t in transforms)
 
-    async def test_second_reading_clears_previous_rotation(self, user: User) -> None:
-        """A second reading removes the transform from previously-reversed images."""
+    async def test_reading_clears_pre_existing_rotation_on_upright_slots(self, user: User) -> None:
+        """The per-card clear path pops a pre-existing transform from upright slots.
+
+        Plant a 180° transform on *every* (hidden) image before dealing, then run a
+        reading: only the reversed slot should keep a transform — the upright slots
+        must be cleared by the ``else`` branch in ``_run_reading``.
+
+        Planting *before the first reading* is deliberate: the summary text is empty
+        until a reading completes, so ``should_see("Summary")`` reliably waits for
+        it. After a reading the summary persists, so a second click cannot be
+        awaited that way (an earlier version of this test asserted against stale
+        first-reading state and so never exercised clearing at all).
+        """
         await user.open("/")
-        user.find("New Reading").click()
-        await user.should_see("Summary")
-
-        user.find("New Reading").click()
-        await user.should_see("Summary")
-
         with user.client:
-            images = list(ElementFilter(kind=ui.image))
-        transforms = [img.style.get("transform", "") for img in images]
-
-        # With the same seed, orientations repeat: cards 0-1 upright, card 2
-        # reversed.  The clearing logic (style(remove="transform")) runs for
-        # upright cards, so at least one image should have no transform.
-        assert any(not t or "180deg" not in t for t in transforms)
+            for img in ElementFilter(kind=ui.image):
+                img.style("transform: rotate(180deg);")
+        user.find("New Reading").click()
+        await user.should_see("Summary")
+        with user.client:
+            transforms = [img.style.get("transform", "") for img in ElementFilter(kind=ui.image)]
+        # The stub deals exactly one reversed card (3-position spread, seed 0): its
+        # image keeps the 180° transform; the upright slots were cleared.
+        assert sum("180deg" in t for t in transforms) == 1
