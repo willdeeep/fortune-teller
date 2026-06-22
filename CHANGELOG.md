@@ -9,7 +9,16 @@ so a release is created by tagging — there is no version field to bump.
 
 ## [Unreleased]
 
-_Nothing yet._
+### Changed
+
+- **UI migrated from Gradio to NiceGUI** (plan 0035) — the `fortune-teller`
+  console script now launches a NiceGUI app (`application/ui/nicegui_app.py`,
+  on FastAPI). Card detail views use a real `ui.dialog` overlay instead of the
+  always-visible Markdown panel; the reading sequence updates progressively via
+  `asyncio.to_thread` for the blocking LLM calls. Framework-agnostic formatters
+  and the reading generator carried over unchanged. `gradio` is replaced by
+  `nicegui` in the dependencies. Establishes the framework for the v0.7.0 UI
+  work (0023/0024/0025/0030/0031).
 
 ## [0.6.1] — 2026-06-17
 
