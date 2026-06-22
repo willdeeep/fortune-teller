@@ -16,6 +16,13 @@ Plan 0030 adds:
 - Spread selector (``ui.select``) backed by :func:`list_spreads`.
 - CSS-grid renderer for 2D spread layouts (e.g. Celtic Cross).
 - Per-position ``transform:rotate()`` for the crossing card.
+
+Plan 0024 adds:
+- Position-title → meaning popover (click a position title to open a
+  ``ui.dialog`` with ``SpreadPosition.meaning`` + source link via
+  :func:`_format_position_info`).
+- Reinforcing/opposing synergy references in the card-detail dialog
+  (rendered in :func:`_format_card_detail` when *cards_by_id* is supplied).
 """
 
 from __future__ import annotations
@@ -78,10 +85,12 @@ def _format_card_text(
 def _format_card_detail(
     card: Card,
     image_path: str | None = None,
+    cards_by_id: dict[str, Card] | None = None,
 ) -> str:
     """Render a full card detail view as Markdown.
 
     Includes the card image (if available), all structured sections,
+    reinforcing/opposing references (when *cards_by_id* is provided),
     and a source-attribution link.  Degrades gracefully when sections
     or the image are absent.
     """
@@ -113,6 +122,21 @@ def _format_card_detail(
     else:
         lines.append("*No structured data available for this card.*")
         lines.append("")
+
+    # Reinforcing / opposing references (v0.6.0 synergy fields).
+    # Resolved to display names only when *cards_by_id* is provided so the
+    # pure formatter stays deterministic and unit-testable in isolation.
+    if cards_by_id is not None:
+        if card.reinforcing_ids:
+            names = [cards_by_id[rid].name for rid in card.reinforcing_ids if rid in cards_by_id]
+            if names:
+                lines.append(f"**Reinforcing:** {', '.join(names)}")
+                lines.append("")
+        if card.opposing_ids:
+            names = [cards_by_id[oid].name for oid in card.opposing_ids if oid in cards_by_id]
+            if names:
+                lines.append(f"**Opposing:** {', '.join(names)}")
+                lines.append("")
 
     source_url = str(card.source_url)
     lines.append(f"[View source ↗]({source_url})")
@@ -305,6 +329,7 @@ async def reading_page() -> None:
 
     state: dict[str, list[str] | None] = {"dealt_ids": []}
     detail_dialog, detail_content = _build_detail_dialog()
+    position_dialog, position_content = _build_position_dialog()
 
     card_images: list[ui.image] = []
     card_texts: list[ui.markdown] = []
@@ -321,13 +346,15 @@ async def reading_page() -> None:
         positions = svc._spread.positions
         with card_container:
             _build_card_layout(
-                positions, state, detail_content, detail_dialog, card_images, card_texts
+                positions,
+                state,
+                detail_content,
+                detail_dialog,
+                position_content,
+                position_dialog,
+                card_images,
+                card_texts,
             )
-            position_meanings_md = "  \n".join(
-                _format_position_info(pos.name, pos.meaning, str(pos.source_url))
-                for pos in positions
-            )
-            ui.markdown(position_meanings_md)
 
     rebuild_card_panels()
 
@@ -375,14 +402,34 @@ def _build_card_layout(
     state: dict[str, list[str] | None],
     detail_content: ui.markdown,
     detail_dialog: ui.dialog,
+    position_content: ui.markdown,
+    position_dialog: ui.dialog,
     card_images: list[ui.image],
     card_texts: list[ui.markdown],
 ) -> None:
     """Build card panels using grid or row layout based on position hints."""
     if _has_grid_layout(positions):
-        _build_card_grid(positions, state, detail_content, detail_dialog, card_images, card_texts)
+        _build_card_grid(
+            positions,
+            state,
+            detail_content,
+            detail_dialog,
+            position_content,
+            position_dialog,
+            card_images,
+            card_texts,
+        )
     else:
-        _build_card_row(positions, state, detail_content, detail_dialog, card_images, card_texts)
+        _build_card_row(
+            positions,
+            state,
+            detail_content,
+            detail_dialog,
+            position_content,
+            position_dialog,
+            card_images,
+            card_texts,
+        )
 
 
 def _build_card_grid(
@@ -390,6 +437,8 @@ def _build_card_grid(
     state: dict[str, list[str] | None],
     detail_content: ui.markdown,
     detail_dialog: ui.dialog,
+    position_content: ui.markdown,
+    position_dialog: ui.dialog,
     card_images: list[ui.image],
     card_texts: list[ui.markdown],
 ) -> None:
@@ -410,7 +459,16 @@ def _build_card_grid(
                 f"grid-row:{row_str};grid-column:{col_str};{_GRID_CARD_STYLE}{rot}"
             )
             with cell:
-                ui.label(pos.name).classes("text-xs font-bold text-center")
+                title = (
+                    ui.label(pos.name)
+                    .classes("text-xs font-bold text-center")
+                    .style("cursor:pointer;")
+                )
+                title.on(
+                    "click",
+                    lambda _, p=pos: _show_position_meaning(p, position_content, position_dialog),
+                    js_handler="(e) => { e.stopPropagation(); emit(e); }",
+                )
                 img = ui.image().classes("hidden").style("max-width:70px;max-height:100px;")
                 txt = ui.markdown().classes("hidden text-xs text-center")
                 card_images.append(img)
@@ -427,6 +485,8 @@ def _build_card_row(
     state: dict[str, list[str] | None],
     detail_content: ui.markdown,
     detail_dialog: ui.dialog,
+    position_content: ui.markdown,
+    position_dialog: ui.dialog,
     card_images: list[ui.image],
     card_texts: list[ui.markdown],
 ) -> None:
@@ -434,7 +494,11 @@ def _build_card_row(
     with ui.row().classes("w-full justify-center"):
         for i, pos in enumerate(positions):
             with ui.card().classes("w-1/3 min-w-[200px]"):
-                ui.label(pos.name).classes("text-h6")
+                title = ui.label(pos.name).classes("text-h6").style("cursor:pointer;")
+                title.on(
+                    "click",
+                    lambda _, p=pos: _show_position_meaning(p, position_content, position_dialog),
+                )
                 img = ui.image().classes("hidden")
                 txt = ui.markdown().classes("hidden")
                 card_images.append(img)
@@ -451,6 +515,26 @@ def _build_detail_dialog() -> tuple[ui.dialog, ui.markdown]:
         content = ui.markdown()
         ui.button("Close", on_click=dialog.close)
     return dialog, content
+
+
+def _build_position_dialog() -> tuple[ui.dialog, ui.markdown]:
+    """Construct the position-meaning modal dialog and return (dialog, content)."""
+    with ui.dialog() as dialog, ui.card().classes("w-72"):
+        content = ui.markdown()
+        ui.button("Close", on_click=dialog.close)
+    return dialog, content
+
+
+def _show_position_meaning(
+    position: SpreadPosition,
+    content: ui.markdown,
+    dialog: ui.dialog,
+) -> None:
+    """Open the position-meaning dialog for *position*."""
+    content.set_content(
+        _format_position_info(position.name, position.meaning, str(position.source_url))
+    )
+    dialog.open()
 
 
 async def _run_reading(
@@ -520,7 +604,9 @@ def _show_detail(
             content.set_content(f"*Card not found: {card_id}*")
         else:
             img_url = _image_url(card_id)
-            content.set_content(_format_card_detail(card, image_path=img_url))
+            content.set_content(
+                _format_card_detail(card, image_path=img_url, cards_by_id=_cards_by_id)
+            )
     dialog.open()
 
 
