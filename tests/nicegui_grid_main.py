@@ -75,17 +75,21 @@ _grid_service = _StubReadingService(deck=_deck, spread=_grid_spread())
 _row_service = _StubReadingService(deck=_deck, spread=_make_spread(3))
 _history = _StubHistoryStore()
 
-_services = {"grid-spread": _grid_service, "test-spread": _row_service}
+_services = {
+    ("test-deck", "grid-spread"): _grid_service,
+    ("test-deck", "test-spread"): _row_service,
+}
 
 
-def _factory(spread_id: str) -> ReadingService:
-    return _services[spread_id]  # type: ignore[return-value]
+def _factory(deck_id: str, spread_id: str) -> ReadingService:
+    return _services[(deck_id, spread_id)]  # type: ignore[return-value]
 
 
 build_app(
     _grid_service,
     history_store=_history,
     spread_options=[("grid-spread", "Grid Spread"), ("test-spread", "Test Spread")],
+    deck_options=[("test-deck", "Test Deck")],
     service_factory=_factory,
 )
 
