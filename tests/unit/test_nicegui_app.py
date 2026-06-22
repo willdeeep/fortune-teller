@@ -571,6 +571,7 @@ class TestBuildApp:
 # ---------------------------------------------------------------------------
 
 _MAIN = "tests/nicegui_main.py"
+_GRID_MAIN = "tests/nicegui_grid_main.py"
 
 
 @pytest.mark.unit
@@ -678,3 +679,158 @@ class TestMain:
         assert ran["port"] == 7860
         assert ran["title"] == "Fortune Teller"
         assert nicegui_app_module._service is stub_service
+
+
+# ---------------------------------------------------------------------------
+# _format_card_detail — reinforcing/opposing synergy references (plan 0024)
+# ---------------------------------------------------------------------------
+
+
+def _synergy_card() -> Card:
+    """Card with reinforcing/opposing IDs for synergy-render tests."""
+    return Card(
+        id="the-fool",
+        name="The Fool",
+        arcana=Arcana.MAJOR,
+        reinforcing_ids=["the-magician", "the-high-priestess"],
+        opposing_ids=["the-tower"],
+        source_url=HttpUrl("https://example.test/the-fool"),
+    )
+
+
+def _ref_card(card_id: str, name: str) -> Card:
+    return Card(
+        id=card_id,
+        name=name,
+        arcana=Arcana.MAJOR,
+        source_url=HttpUrl(f"https://example.test/{card_id}"),
+    )
+
+
+@pytest.mark.unit
+class TestFormatCardDetailSynergy:
+    def test_renders_reinforcing_names_when_cards_by_id_provided(self) -> None:
+        card = _synergy_card()
+        ref_deck: dict[str, Card] = {
+            card.id: card,
+            "the-magician": _ref_card("the-magician", "The Magician"),
+            "the-high-priestess": _ref_card("the-high-priestess", "The High Priestess"),
+        }
+        result = _format_card_detail(card, cards_by_id=ref_deck)
+        assert "**Reinforcing:** The Magician, The High Priestess" in result
+
+    def test_renders_opposing_names_when_cards_by_id_provided(self) -> None:
+        card = Card(
+            id="the-fool",
+            name="The Fool",
+            arcana=Arcana.MAJOR,
+            opposing_ids=["the-tower"],
+            source_url=HttpUrl("https://example.test/the-fool"),
+        )
+        ref_deck: dict[str, Card] = {
+            card.id: card,
+            "the-tower": _ref_card("the-tower", "The Tower"),
+        }
+        result = _format_card_detail(card, cards_by_id=ref_deck)
+        assert "**Opposing:** The Tower" in result
+
+    def test_omits_synergy_refs_when_cards_by_id_none(self) -> None:
+        card = _synergy_card()
+        result = _format_card_detail(card)
+        assert "Reinforcing:" not in result
+        assert "Opposing:" not in result
+
+    def test_omits_synergy_refs_when_ids_do_not_resolve(self) -> None:
+        card = _synergy_card()
+        # cards_by_id only contains the card itself — reinforcing/opposing IDs
+        # cannot resolve, so the lines should be omitted.
+        result = _format_card_detail(card, cards_by_id={card.id: card})
+        assert "Reinforcing:" not in result
+        assert "Opposing:" not in result
+
+    def test_omits_synergy_refs_when_card_has_none(self) -> None:
+        card = _ref_card("the-fool", "The Fool")
+        other = _ref_card("the-magician", "The Magician")
+        result = _format_card_detail(card, cards_by_id={card.id: card, other.id: other})
+        assert "Reinforcing:" not in result
+        assert "Opposing:" not in result
+
+    def test_renders_both_reinforcing_and_opposing_together(self) -> None:
+        card = _synergy_card()
+        ref_deck: dict[str, Card] = {
+            card.id: card,
+            "the-magician": _ref_card("the-magician", "The Magician"),
+            "the-high-priestess": _ref_card("the-high-priestess", "The High Priestess"),
+            "the-tower": _ref_card("the-tower", "The Tower"),
+        }
+        result = _format_card_detail(card, cards_by_id=ref_deck)
+        assert "**Reinforcing:** The Magician, The High Priestess" in result
+        assert "**Opposing:** The Tower" in result
+        # Reinforcing block comes before the source link.
+        assert result.index("**Reinforcing:**") < result.index("[View source ↗]")
+        assert result.index("**Opposing:**") < result.index("[View source ↗]")
+
+
+# ---------------------------------------------------------------------------
+# _show_position_meaning — NiceGUI User interaction (plan 0024)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+@pytest.mark.nicegui_main_file(_MAIN)
+class TestPositionMeaningDialog:
+    """Clicking a position title opens the meaning popover (row layout)."""
+
+    async def test_click_position_title_opens_meaning(self, user: User) -> None:
+        await user.open("/")
+        # The row layout renders the title as a ui.label ("Position 0")
+        # alongside the per-position "📋 Position 0" detail button.  Filter by
+        # kind to ensure we click the title label, not the button.
+        user.find(kind=ui.label, content="Position 0").click()
+        await user.should_see("Meaning of position 0.")
+        await user.should_see("Source")
+
+    async def test_meaning_dialog_has_close_button(self, user: User) -> None:
+        await user.open("/")
+        user.find(kind=ui.label, content="Position 1").click()
+        await user.should_see("Meaning of position 1.")
+        user.find("Close").click()
+
+    async def test_click_title_works_after_dealing(self, user: User) -> None:
+        await user.open("/")
+        user.find("New Reading").click()
+        await user.should_see("Summary")
+        user.find(kind=ui.label, content="Position 2").click()
+        await user.should_see("Meaning of position 2.")
+
+
+# ---------------------------------------------------------------------------
+# Grid-layout position-meaning dialog (plan 0024 + 0030)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+@pytest.mark.nicegui_main_file(_GRID_MAIN)
+class TestPositionMeaningGridDialog:
+    """Clicking a position title in the grid layout opens the meaning popover."""
+
+    async def test_grid_position_title_opens_meaning(self, user: User) -> None:
+        await user.open("/")
+        user.find(kind=ui.label, content="Center").click()
+        await user.should_see("The centre.")
+        await user.should_see("Source")
+
+    async def test_grid_title_click_does_not_open_card_detail(self, user: User) -> None:
+        """Clicking the title should NOT also fire the cell's card-detail dialog.
+
+        The browser-side ``stopPropagation`` keeps the two handlers from
+        stepping on each other; the headless ``User`` simulation dispatches
+        only to the clicked element's listeners, so only the title handler
+        fires here.
+        """
+        await user.open("/")
+        user.find(kind=ui.label, content="Crossing").click()
+        await user.should_see("The crossing card.")
+        # No card has been dealt yet, so the card-detail dialog would show
+        # the "No card dealt" placeholder — assert it does NOT appear.
+        await user.should_not_see("No card dealt")
