@@ -11,12 +11,18 @@ drive the UI logic without spinning up a real server.
 The reading handler uses ``asyncio.to_thread`` for blocking LLM calls so the
 NiceGUI event loop stays responsive.  Card detail views use ``ui.dialog``
 for the modal overlay (plan 0024).
+
+Plan 0030 adds:
+- Spread selector (``ui.select``) backed by :func:`list_spreads`.
+- CSS-grid renderer for 2D spread layouts (e.g. Celtic Cross).
+- Per-position ``transform:rotate()`` for the crossing card.
 """
 
 from __future__ import annotations
 
 import asyncio
 import atexit
+from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING
 from uuid import UUID
@@ -38,10 +44,13 @@ _service: ReadingService | None = None
 _history_store: HistoryStore | None = None
 _images_dir: Path | None = None
 _cards_by_id: dict[str, Card] = {}
+_spread_options: list[tuple[str, str]] = []
+_service_factory: Callable[[str], ReadingService] | None = None
+_service_cache: dict[str, ReadingService] = {}
 
 
 # ---------------------------------------------------------------------------
-# Framework-agnostic formatters (unchanged from Gradio version)
+# Framework-agnostic formatters
 # ---------------------------------------------------------------------------
 
 
@@ -179,6 +188,45 @@ def _image_url(card_id: str) -> str | None:
 
 
 # ---------------------------------------------------------------------------
+# Layout helpers (framework-agnostic, unit-testable)
+# ---------------------------------------------------------------------------
+
+
+def _has_grid_layout(positions: list[SpreadPosition]) -> bool:
+    """Return True when all positions have ``row`` and ``col`` set."""
+    return all(p.row is not None and p.col is not None for p in positions)
+
+
+def _grid_dimensions(positions: list[SpreadPosition]) -> tuple[int, int]:
+    """Return ``(rows, cols)`` needed for a grid layout.
+
+    Assumes all positions have ``row``/``col`` set (call after :func:`_has_grid_layout`).
+    """
+    max_row = max(p.row for p in positions if p.row is not None)
+    max_col = max(p.col for p in positions if p.col is not None)
+    return (max_row + 1, max_col + 1)
+
+
+def _resolve_service(spread_id: str) -> ReadingService:
+    """Return the service for *spread_id*, using cache or factory.
+
+    Falls back to the default ``_service`` when no factory is configured.
+    """
+    if spread_id in _service_cache:
+        return _service_cache[spread_id]
+    if _service is not None and _service._spread.id == spread_id:
+        _service_cache[spread_id] = _service
+        return _service
+    if _service_factory is not None:
+        svc = _service_factory(spread_id)
+        _service_cache[spread_id] = svc
+        return svc
+    if _service is not None:
+        return _service
+    raise RuntimeError("No service configured.")
+
+
+# ---------------------------------------------------------------------------
 # UI construction
 # ---------------------------------------------------------------------------
 
@@ -187,6 +235,8 @@ def build_app(
     reading_service: ReadingService,
     history_store: HistoryStore | None = None,
     images_dir: Path | None = None,
+    spread_options: list[tuple[str, str]] | None = None,
+    service_factory: Callable[[str], ReadingService] | None = None,
 ) -> None:
     """Wire up dependencies and register static-file mounts.
 
@@ -199,23 +249,38 @@ def build_app(
 
     *images_dir* is optional; when provided, card artwork is resolved
     from this directory and displayed above each panel.
+
+    *spread_options* is an optional list of ``(spread_id, display_name)``
+    tuples. When provided, a spread selector is shown so the user can
+    choose between spreads (e.g. New Moon vs Celtic Cross).
+
+    *service_factory* is an optional callable that takes a ``spread_id``
+    and returns a :class:`ReadingService` for that spread. Used when
+    *spread_options* is provided and the selected spread differs from
+    the default service's spread.
     """
     global _service, _history_store, _images_dir, _cards_by_id  # noqa: PLW0603
+    global _spread_options, _service_factory, _service_cache  # noqa: PLW0603
     _service = reading_service
     _history_store = history_store
     _images_dir = images_dir
     _cards_by_id = {c.id: c for c in reading_service._deck.cards}
+    _spread_options = spread_options or []
+    _service_factory = service_factory
+    _service_cache = {}
 
     if images_dir is not None and images_dir.is_dir():
         app.add_static_files("/images", str(images_dir))
 
-    # Register the index page here (not as a module-level decorator) so that
-    # the route is (re)created against whatever NiceGUI app is current — this is
-    # what lets the ``nicegui.testing`` ``User`` simulation, which resets the
-    # global app between tests, re-register the page on each run.  Idempotent:
-    # repeated ``build_app`` calls within one process register the route once.
     if reading_page not in Client.page_routes:
         ui.page("/")(reading_page)
+
+
+_GRID_CARD_STYLE = (
+    "border:1px solid #888;border-radius:6px;padding:4px;"
+    "display:flex;flex-direction:column;align-items:center;"
+    "min-height:120px;max-width:90px;cursor:pointer;"
+)
 
 
 async def reading_page() -> None:
@@ -226,31 +291,65 @@ async def reading_page() -> None:
 
     spread = _service._spread
     deck = _service._deck
-    positions = spread.positions
-    n = len(positions)
 
-    ui.markdown(f"# Fortune Teller\n### {spread.name} · {deck.name}")
-    position_meanings_md = "  \n".join(
-        _format_position_info(pos.name, pos.meaning, str(pos.source_url)) for pos in positions
-    )
+    title_md = ui.markdown(f"# Fortune Teller\n### {spread.name} · {deck.name}")
+
+    spread_select: ui.select | None = None
+    if _spread_options:
+        opts = {sid: name for sid, name in _spread_options}
+        spread_select = ui.select(
+            options=opts,
+            value=spread.id,
+            label="Spread",
+        )
 
     state: dict[str, list[str] | None] = {"dealt_ids": []}
-    position_labels: list[ui.label] = []
+    detail_dialog, detail_content = _build_detail_dialog()
+
     card_images: list[ui.image] = []
     card_texts: list[ui.markdown] = []
 
-    _build_card_panels(positions, position_labels, card_images, card_texts)
-    ui.markdown(position_meanings_md)
+    card_container = ui.column().classes("w-full")
 
-    detail_dialog, detail_content = _build_detail_dialog()
-    _build_detail_buttons(positions, state, detail_content, detail_dialog)
+    def rebuild_card_panels() -> None:
+        """Clear and rebuild card panels for the current spread."""
+        card_images.clear()
+        card_texts.clear()
+        state["dealt_ids"] = []
+        card_container.clear()
+        svc = _resolve_current_service(spread_select)
+        positions = svc._spread.positions
+        with card_container:
+            _build_card_layout(
+                positions, state, detail_content, detail_dialog, card_images, card_texts
+            )
+            position_meanings_md = "  \n".join(
+                _format_position_info(pos.name, pos.meaning, str(pos.source_url))
+                for pos in positions
+            )
+            ui.markdown(position_meanings_md)
+
+    rebuild_card_panels()
+
+    if spread_select is not None:
+
+        def on_spread_change() -> None:
+            svc = _resolve_current_service(spread_select)
+            current_spread = svc._spread
+            title_md.set_content(f"# Fortune Teller\n### {current_spread.name} · {svc._deck.name}")
+            rebuild_card_panels()
+
+        spread_select.on("update:model-value", on_spread_change)
 
     summary_md = ui.markdown()
     new_reading_btn = ui.button("New Reading", color="primary")
 
     async def do_reading() -> None:
+        svc = _resolve_current_service(spread_select)
+        positions = svc._spread.positions
+        n = len(positions)
         await _run_reading(
-            _service, positions, n, state, card_images, card_texts, summary_md, new_reading_btn
+            svc, positions, n, state, card_images, card_texts, summary_md, new_reading_btn
         )
 
     new_reading_btn.on_click(do_reading)
@@ -259,21 +358,88 @@ async def reading_page() -> None:
         _build_history_section(_history_store)
 
 
-def _build_card_panels(
+def _resolve_current_service(spread_select: ui.select | None) -> ReadingService:
+    """Return the service for the currently selected spread."""
+    if _service is None:
+        raise RuntimeError("No service configured.")
+    if spread_select is not None and spread_select.value is not None:
+        return _resolve_service(str(spread_select.value))
+    return _service
+
+
+def _build_card_layout(
     positions: list[SpreadPosition],
-    position_labels: list[ui.label],
+    state: dict[str, list[str] | None],
+    detail_content: ui.markdown,
+    detail_dialog: ui.dialog,
     card_images: list[ui.image],
     card_texts: list[ui.markdown],
 ) -> None:
-    """Construct the card image + text panels for each spread position."""
-    with ui.row().classes("w-full justify-center"):
-        for pos in positions:
-            with ui.card().classes("w-1/3 min-w-[200px]"):
-                position_labels.append(ui.label(pos.name).classes("text-h6"))
-                img = ui.image().classes("hidden")
+    """Build card panels using grid or row layout based on position hints."""
+    if _has_grid_layout(positions):
+        _build_card_grid(positions, state, detail_content, detail_dialog, card_images, card_texts)
+    else:
+        _build_card_row(positions, state, detail_content, detail_dialog, card_images, card_texts)
+
+
+def _build_card_grid(
+    positions: list[SpreadPosition],
+    state: dict[str, list[str] | None],
+    detail_content: ui.markdown,
+    detail_dialog: ui.dialog,
+    card_images: list[ui.image],
+    card_texts: list[ui.markdown],
+) -> None:
+    """Render cards in a CSS grid layout for 2D spreads (e.g. Celtic Cross)."""
+    rows, cols = _grid_dimensions(positions)
+    grid = ui.element("div").style(
+        f"display:grid;"
+        f"grid-template-columns:repeat({cols},100px);"
+        f"grid-template-rows:repeat({rows},150px);"
+        f"gap:8px;justify-content:center;"
+    )
+    with grid:
+        for i, pos in enumerate(positions):
+            rot = f"transform:rotate({pos.rotation}deg);" if pos.rotation else ""
+            row_str = str((pos.row or 0) + 1)
+            col_str = str((pos.col or 0) + 1)
+            cell = ui.element("div").style(
+                f"grid-row:{row_str};grid-column:{col_str};{_GRID_CARD_STYLE}{rot}"
+            )
+            with cell:
+                ui.label(pos.name).classes("text-xs font-bold text-center")
+                img = ui.image().classes("hidden").style("max-width:70px;max-height:100px;")
+                txt = ui.markdown().classes("hidden text-xs text-center")
                 card_images.append(img)
-                txt = ui.markdown().classes("hidden")
                 card_texts.append(txt)
+
+            cell.on(
+                "click",
+                lambda idx=i: _show_detail(idx, state, detail_content, detail_dialog),
+            )
+
+
+def _build_card_row(
+    positions: list[SpreadPosition],
+    state: dict[str, list[str] | None],
+    detail_content: ui.markdown,
+    detail_dialog: ui.dialog,
+    card_images: list[ui.image],
+    card_texts: list[ui.markdown],
+) -> None:
+    """Render cards in a simple row layout (fallback for spreads without grid hints)."""
+    with ui.row().classes("w-full justify-center"):
+        for i, pos in enumerate(positions):
+            with ui.card().classes("w-1/3 min-w-[200px]"):
+                ui.label(pos.name).classes("text-h6")
+                img = ui.image().classes("hidden")
+                txt = ui.markdown().classes("hidden")
+                card_images.append(img)
+                card_texts.append(txt)
+                ui.button(
+                    f"📋 {pos.name}",
+                    on_click=lambda idx=i: _show_detail(idx, state, detail_content, detail_dialog),
+                )
 
 
 def _build_detail_dialog() -> tuple[ui.dialog, ui.markdown]:
@@ -282,21 +448,6 @@ def _build_detail_dialog() -> tuple[ui.dialog, ui.markdown]:
         content = ui.markdown()
         ui.button("Close", on_click=dialog.close)
     return dialog, content
-
-
-def _build_detail_buttons(
-    positions: list[SpreadPosition],
-    state: dict[str, list[str] | None],
-    detail_content: ui.markdown,
-    detail_dialog: ui.dialog,
-) -> None:
-    """Build one detail button per spread position."""
-    with ui.row():
-        for i, pos in enumerate(positions):
-            ui.button(
-                f"📋 {pos.name}",
-                on_click=lambda idx=i: _show_detail(idx, state, detail_content, detail_dialog),
-            )
 
 
 async def _run_reading(
@@ -431,6 +582,7 @@ def _history_rows(history_store: HistoryStore) -> list[dict[str, str]]:
 def main() -> None:
     """Console-script entry point: build and launch the NiceGUI app."""
     from fortune_teller.application.config import settings  # noqa: PLC0415
+    from fortune_teller.application.services.loading import list_spreads  # noqa: PLC0415
     from fortune_teller.application.services.reading import (  # noqa: PLC0415
         build_reading_service,
     )
@@ -443,7 +595,19 @@ def main() -> None:
     service = build_reading_service(settings, history_store=history_store)
     deck_images_dir = settings.images_dir / service.deck_id
 
-    build_app(service, history_store=history_store, images_dir=deck_images_dir)
+    parsed_dir = settings.ft_data_dir / "parsed"
+    spread_options = list_spreads(parsed_dir) if parsed_dir.is_dir() else None
+
+    def factory(spread_id: str) -> ReadingService:
+        return build_reading_service(settings, spread_id=spread_id, history_store=history_store)
+
+    build_app(
+        service,
+        history_store=history_store,
+        images_dir=deck_images_dir,
+        spread_options=spread_options,
+        service_factory=factory,
+    )
 
     ui.run(
         host="127.0.0.1",

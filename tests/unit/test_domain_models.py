@@ -323,6 +323,48 @@ class TestSpreadPosition:
                 source_url=HttpUrl(_SPREAD_URL),
             )
 
+    def test_layout_fields_default_to_none(self) -> None:
+        pos = _make_spread_position(0, "Past")
+        assert pos.row is None
+        assert pos.col is None
+        assert pos.rotation == 0
+
+    def test_layout_fields_accepted(self) -> None:
+        pos = SpreadPosition(
+            index=0,
+            name="Present",
+            meaning="The current situation.",
+            source_url=HttpUrl(_SPREAD_URL),
+            row=2,
+            col=1,
+            rotation=90,
+        )
+        assert pos.row == 2
+        assert pos.col == 1
+        assert pos.rotation == 90
+
+    def test_json_round_trip_with_layout_fields(self) -> None:
+        pos = SpreadPosition(
+            index=0,
+            name="Present",
+            meaning="The current situation.",
+            source_url=HttpUrl(_SPREAD_URL),
+            row=2,
+            col=1,
+            rotation=90,
+        )
+        reloaded = SpreadPosition.model_validate_json(pos.model_dump_json())
+        assert reloaded.row == 2
+        assert reloaded.col == 1
+        assert reloaded.rotation == 90
+
+    def test_json_round_trip_without_layout_fields(self) -> None:
+        pos = _make_spread_position(0, "Past")
+        reloaded = SpreadPosition.model_validate_json(pos.model_dump_json())
+        assert reloaded.row is None
+        assert reloaded.col is None
+        assert reloaded.rotation == 0
+
 
 # ---------------------------------------------------------------------------
 # Spread

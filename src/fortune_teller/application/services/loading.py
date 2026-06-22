@@ -157,9 +157,29 @@ def list_spread_ids(parsed_dir: Path) -> list[str]:
     return [p.stem for p in sorted(spreads_dir.glob("*.json"))]
 
 
+def list_spreads(parsed_dir: Path) -> list[tuple[str, str]]:
+    """Return ``(id, name)`` tuples for every spread under ``parsed_dir / spreads/``.
+
+    Reads each spread JSON to extract the display name. Sorted by slug for
+    deterministic ordering.
+
+    Returns:
+        Sorted list of ``(spread_id, display_name)`` tuples.
+    """
+    spreads_dir = parsed_dir / "spreads"
+    if not spreads_dir.is_dir():
+        return []
+    result: list[tuple[str, str]] = []
+    for path in sorted(spreads_dir.glob("*.json")):
+        spread = Spread.model_validate_json(path.read_text(encoding="utf-8"))
+        result.append((spread.id, spread.name))
+    return result
+
+
 __all__ = [
     "list_decks",
     "list_spread_ids",
+    "list_spreads",
     "load_deck",
     "load_first_spread",
     "load_spread",
