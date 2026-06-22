@@ -9,6 +9,8 @@ See plan 0010 for full fixture specification.
 
 from __future__ import annotations
 
+import sys
+from collections.abc import Iterator
 from datetime import UTC, datetime
 from pathlib import Path
 from uuid import UUID
@@ -35,6 +37,30 @@ from fortune_teller.application.stores.embeddings import Embedder
 # Load the NiceGUI ``User`` simulation fixtures (headless — no Selenium).  This
 # provides the ``user`` fixture used by the NiceGUI UI interaction tests.
 pytest_plugins = ["nicegui.testing.user_plugin"]
+
+
+@pytest.fixture(autouse=True)
+def _restore_fortune_teller_modules() -> Iterator[None]:
+    """Restore ``fortune_teller.*`` in ``sys.modules`` after each test.
+
+    NiceGUI's ``User`` simulation resets the global app on teardown and, as part
+    of that, pops the page module *and all its parent packages* from
+    ``sys.modules`` (so a ``runpy`` re-import re-registers pages next time). For
+    ``fortune_teller.application.ui.nicegui_app`` that evicts the whole
+    ``fortune_teller`` tree, which would break later test files that patch or
+    re-import those modules. Re-instating the original module objects afterwards
+    keeps object identity consistent across the suite. Suite-wide (autouse) so
+    any test file that drives the ``User`` fixture is protected.
+    """
+    snapshot = {
+        name: mod
+        for name, mod in sys.modules.items()
+        if name == "fortune_teller" or name.startswith("fortune_teller.")
+    }
+    yield
+    for name, mod in snapshot.items():
+        sys.modules.setdefault(name, mod)
+
 
 # ---------------------------------------------------------------------------
 # Paths
