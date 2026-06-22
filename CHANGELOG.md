@@ -11,6 +11,12 @@ so a release is created by tagging — there is no version field to bump.
 
 ### Added
 
+- **Interactive detail views** (plan 0024) — clicking a position title opens a
+  `ui.dialog` showing the position's meaning + source link (grid and row
+  layouts; the grid title click stops propagation so it doesn't also open the
+  card detail). The card-detail dialog now lists reinforcing/opposing card
+  names, surfacing the v0.6.0 synergy data in the UI. Replaces the static
+  position-meanings markdown block with interactive popups.
 - **Complex spreads + Celtic Cross** (plan 0030) — `SpreadPosition` gains
   optional `row`/`col`/`rotation` layout fields (linear row layout when absent).
   The NiceGUI UI renders 2D spreads via a CSS grid (with a 90°-rotated crossing
