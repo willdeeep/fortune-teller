@@ -11,6 +11,11 @@ so a release is created by tagging — there is no version field to bump.
 
 ### Added
 
+- **Reversed card rotation** (plan 0025) — a reversed card's artwork is now
+  displayed rotated 180° via a native CSS `transform` on the image element
+  (`rotation_style` helper, applied in `_run_reading`); upright cards are
+  unchanged and the transform is cleared when a slot is re-dealt upright. No new
+  dependency (Pillow not required).
 - **Interactive detail views** (plan 0024) — clicking a position title opens a
   `ui.dialog` showing the position's meaning + source link (grid and row
   layouts; the grid title click stops propagation so it doesn't also open the
