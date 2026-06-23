@@ -234,6 +234,23 @@ class TestResolveService:
         with pytest.raises(RuntimeError):
             _resolve_service("any-deck", "anything")
 
+    def test_caches_per_deck_for_same_spread(self) -> None:
+        """The cache key is (deck_id, spread_id): same spread, different decks
+        resolve to distinct services, each built once."""
+        calls: list[tuple[str, str]] = []
+
+        def factory(deck_id: str, spread_id: str) -> _StubReadingService:
+            calls.append((deck_id, spread_id))
+            return _StubReadingService(deck=_make_deck(6), spread=_make_spread(3))
+
+        build_app(_grid_service(), service_factory=factory)  # type: ignore[arg-type]
+        deck_a = _resolve_service("deck-a", "grid-spread")
+        deck_b = _resolve_service("deck-b", "grid-spread")
+        assert deck_a is not deck_b
+        # Each (deck, spread) pair built exactly once; repeat hits the cache.
+        assert _resolve_service("deck-a", "grid-spread") is deck_a
+        assert calls == [("deck-a", "grid-spread"), ("deck-b", "grid-spread")]
+
 
 # ---------------------------------------------------------------------------
 # Grid layout + spread selector (nicegui.testing User simulation)

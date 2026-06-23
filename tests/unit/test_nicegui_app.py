@@ -932,16 +932,27 @@ class TestReversedCardRotation:
 @pytest.mark.unit
 @pytest.mark.nicegui_main_file(_GRID_MAIN)
 class TestDeckSelector:
-    """Deck selector presence and back-compat (single-deck harness has none)."""
+    """Deck selector presence and deck switching (grid harness has two decks)."""
 
     async def test_deck_selector_present_in_grid_harness(self, user: User) -> None:
         await user.open("/")
         await user.should_see("Deck")
 
-    async def test_single_deck_option_rendered(self, user: User) -> None:
+    async def test_default_deck_name_rendered(self, user: User) -> None:
         await user.open("/")
-        # The grid harness has one deck option ("test-deck" → "Test Deck").
+        # The grid harness defaults to "test-deck" → "Test Deck".
         await user.should_see("Test Deck")
+
+    async def test_switching_deck_updates_active_deck(self, user: User) -> None:
+        await user.open("/")
+        await user.should_see("Test Deck")  # default deck in the title
+        # Pick the other deck → on_value_change resolves the alt-deck service,
+        # updates _current_deck_id / _cards_by_id, and rebuilds with a new title.
+        selects = list(user.find(ui.select).elements)
+        deck_select = next(s for s in selects if s.props.get("label") == "Deck")
+        deck_select.set_value("alt-deck")
+        await user.should_see("Alt Deck")
+        assert nicegui_app_module._current_deck_id == "alt-deck"
 
 
 @pytest.mark.unit
