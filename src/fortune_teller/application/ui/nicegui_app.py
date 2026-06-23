@@ -785,6 +785,7 @@ def main() -> None:
         host="127.0.0.1",
         port=7860,
         show=False,
+        reload=False,
         title="Fortune Teller",
     )
 
