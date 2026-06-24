@@ -38,6 +38,15 @@ so a release is created by tagging — there is no version field to bump.
 
 ### Changed
 
+- **Roadmap re-sequenced** (README Roadmap — the committed source of truth)
+  after an in-browser UX review. **v0.7.0** is scoped to a _usable_ UI and gains
+  a Celtic Cross layout fix (0036) — the grid previously rendered each card's
+  full interpretation inside a 100px cell, so text overran and overlapped. UX
+  polish (dark theme, History on its own tab + a compact expandable table,
+  header reorganisation) splits into **v0.8.0** (0037), which also pulls in
+  post-reading **user notes** (0034) so the History redesign ships with notes.
+  **Added functionality** (manual card entry, framing question) moves to
+  **v0.9.0**; **single-user login** (0031) becomes its own **v0.10.0**.
 - **UI migrated from Gradio to NiceGUI** (plan 0035) — the `fortune-teller`
   console script now launches a NiceGUI app (`application/ui/nicegui_app.py`,
   on FastAPI). Card detail views use a real `ui.dialog` overlay instead of the

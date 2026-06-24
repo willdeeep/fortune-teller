@@ -108,8 +108,10 @@ uv run mypy src
 | `v0.4.0`       | Interactive detail views — click a card name for a popup with its full structured entry + image + source attribution; hover a position title for a floating definition with a source-attribution link |
 | `v0.5.0`       | Multiple decks — Rider-Waite deck added (ingestion, normalisation, images, deck isolation)                                                                                                            |
 | `v0.6.0`       | Reinforce/Oppose synergy — orientation-aware (Upright/Reversed) reinforcing/opposing meanings woven into readings; Thoth relationships LLM-backfilled                                                 |
-| `v0.7.0`       | UI improvement — framework evaluation, complex spreads (e.g. Celtic Cross), interactive detail views, deck picker, reversed-card rotation, single-user login                                          |
-| `v0.8.0`       | Added functionality — manual card entry mode, optional framing question, post-reading user notes                                                                                                      |
+| `v0.7.0`       | UI improvement (usable) — NiceGUI migration, complex spreads (Celtic Cross), interactive detail views, deck picker, reversed-card rotation, and a usable spread layout (legible Celtic Cross, bounded card sizing)                              |
+| `v0.8.0`       | UX polish — dark theme, History on its own tab with a compact expandable table, header reorganisation, and post-reading **user notes** (add/edit during a reading and from history)                    |
+| `v0.9.0`       | Added functionality — manual card entry mode, optional framing question                                                                                                                               |
+| `v0.10.0`      | User login — single-user local, hashed-password gate                                                                                                                                                  |
 
 ## License
 
