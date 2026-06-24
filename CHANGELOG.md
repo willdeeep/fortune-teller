@@ -11,6 +11,12 @@ so a release is created by tagging — there is no version field to bump.
 
 ### Added
 
+- **UI deck selection** (plan 0023) — a deck `ui.select` dropdown backed by
+  `list_decks` lets the reader choose which deck a reading uses (e.g. Book of
+  Thoth vs Rider-Waite). Services are cached per `(deck_id, spread_id)` pair;
+  image URLs resolve from the parent `images_dir` using the current deck ID
+  (`/images/<deck_id>/<file>`). Single-deck setups render no selector
+  (back-compat). The title and history detail surface the deck name.
 - **Reversed card rotation** (plan 0025) — a reversed card's artwork is now
   displayed rotated 180° via a native CSS `transform` on the image element
   (`rotation_style` helper, applied in `_run_reading`); upright cards are
@@ -48,7 +54,7 @@ so a release is created by tagging — there is no version field to bump.
 - **Untracked `.opencode/opencode.json`** — removed local editor config from
   version control (`git rm --cached`); the `.gitignore` `.opencode` rule keeps
   `.opencode/` and `.claude/` out going forward. A `.gitignore` rule can only
-  ignore files git is *not already tracking*, so the file had to be untracked
+  ignore files git is _not already tracking_, so the file had to be untracked
   explicitly. Dropped the redundant `.opencode/*` ignore line.
 
 ### Added

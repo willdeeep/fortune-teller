@@ -1,10 +1,12 @@
-"""NiceGUI "main file" for the grid-layout + spread-selector interaction tests.
+"""NiceGUI "main file" for the grid-layout + spread/deck-selector interaction tests.
 
-Like ``tests/nicegui_main.py`` but builds the app with two spreads and a service
-factory so the ``User`` simulation can exercise plan 0030's CSS-grid renderer,
-the spread ``ui.select``, and spread switching. The default spread is a 2-D grid
+Like ``tests/nicegui_main.py`` but builds the app with two spreads, two decks,
+and a service factory so the ``User`` simulation can exercise plan 0030's
+CSS-grid renderer, the spread ``ui.select``, and spread switching, plus plan
+0023's deck ``ui.select`` and deck switching. The default spread is a 2-D grid
 (with a 90°-rotated crossing card sharing a cell); the alternate is a plain row
-spread, so switching toggles between the grid and row layouts.
+spread, so switching toggles between the grid and row layouts. Two decks
+("Test Deck" / "Alt Deck") let the deck switch be observed via the title.
 """
 
 from __future__ import annotations
@@ -12,7 +14,7 @@ from __future__ import annotations
 from nicegui import ui
 from pydantic import HttpUrl
 
-from fortune_teller.application.models.domain import Spread, SpreadPosition
+from fortune_teller.application.models.domain import Deck, Spread, SpreadPosition
 from fortune_teller.application.services.reading import ReadingService
 from fortune_teller.application.ui.nicegui_app import build_app
 from tests.unit.test_nicegui_app import (
@@ -71,21 +73,28 @@ def _grid_spread() -> Spread:
 
 
 _deck = _make_deck(12)
+_alt_deck = Deck(id="alt-deck", name="Alt Deck", cards=_deck.cards)
 _grid_service = _StubReadingService(deck=_deck, spread=_grid_spread())
 _row_service = _StubReadingService(deck=_deck, spread=_make_spread(3))
+_alt_grid_service = _StubReadingService(deck=_alt_deck, spread=_grid_spread())
 _history = _StubHistoryStore()
 
-_services = {"grid-spread": _grid_service, "test-spread": _row_service}
+_services = {
+    ("test-deck", "grid-spread"): _grid_service,
+    ("test-deck", "test-spread"): _row_service,
+    ("alt-deck", "grid-spread"): _alt_grid_service,
+}
 
 
-def _factory(spread_id: str) -> ReadingService:
-    return _services[spread_id]  # type: ignore[return-value]
+def _factory(deck_id: str, spread_id: str) -> ReadingService:
+    return _services[(deck_id, spread_id)]  # type: ignore[return-value]
 
 
 build_app(
     _grid_service,
     history_store=_history,
     spread_options=[("grid-spread", "Grid Spread"), ("test-spread", "Test Spread")],
+    deck_options=[("test-deck", "Test Deck"), ("alt-deck", "Alt Deck")],
     service_factory=_factory,
 )
 

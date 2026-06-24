@@ -199,40 +199,57 @@ def _grid_service() -> _StubReadingService:
 
 @pytest.mark.unit
 class TestResolveService:
-    def test_returns_default_when_id_matches(self) -> None:
+    def test_returns_default_when_ids_match(self) -> None:
         svc = _grid_service()
         build_app(svc)
-        assert _resolve_service("grid-spread") is svc
+        assert _resolve_service(svc.deck_id, "grid-spread") is svc
 
     def test_uses_factory_for_other_spread(self) -> None:
         other = _StubReadingService(deck=_make_deck(6), spread=_make_spread(3))
-        build_app(_grid_service(), service_factory=lambda _sid: other)
-        assert _resolve_service("test-spread") is other
+        build_app(_grid_service(), service_factory=lambda _did, _sid: other)
+        assert _resolve_service("test-deck", "test-spread") is other
 
     def test_caches_factory_result(self) -> None:
-        calls: list[str] = []
+        calls: list[tuple[str, str]] = []
 
-        def factory(sid: str) -> _StubReadingService:
-            calls.append(sid)
+        def factory(deck_id: str, spread_id: str) -> _StubReadingService:
+            calls.append((deck_id, spread_id))
             return _StubReadingService(deck=_make_deck(6), spread=_make_spread(3))
 
         build_app(_grid_service(), service_factory=factory)  # type: ignore[arg-type]
-        first = _resolve_service("test-spread")
-        second = _resolve_service("test-spread")
+        first = _resolve_service("test-deck", "test-spread")
+        second = _resolve_service("test-deck", "test-spread")
         assert first is second
-        assert calls == ["test-spread"]
+        assert calls == [("test-deck", "test-spread")]
 
     def test_falls_back_to_default_without_factory(self) -> None:
         default = _grid_service()
         build_app(default)
-        assert _resolve_service("unknown-spread") is default
+        assert _resolve_service("test-deck", "unknown-spread") is default
 
     def test_raises_when_no_service(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(nicegui_app_module, "_service", None)
         monkeypatch.setattr(nicegui_app_module, "_service_factory", None)
         monkeypatch.setattr(nicegui_app_module, "_service_cache", {})
         with pytest.raises(RuntimeError):
-            _resolve_service("anything")
+            _resolve_service("any-deck", "anything")
+
+    def test_caches_per_deck_for_same_spread(self) -> None:
+        """The cache key is (deck_id, spread_id): same spread, different decks
+        resolve to distinct services, each built once."""
+        calls: list[tuple[str, str]] = []
+
+        def factory(deck_id: str, spread_id: str) -> _StubReadingService:
+            calls.append((deck_id, spread_id))
+            return _StubReadingService(deck=_make_deck(6), spread=_make_spread(3))
+
+        build_app(_grid_service(), service_factory=factory)  # type: ignore[arg-type]
+        deck_a = _resolve_service("deck-a", "grid-spread")
+        deck_b = _resolve_service("deck-b", "grid-spread")
+        assert deck_a is not deck_b
+        # Each (deck, spread) pair built exactly once; repeat hits the cache.
+        assert _resolve_service("deck-a", "grid-spread") is deck_a
+        assert calls == [("deck-a", "grid-spread"), ("deck-b", "grid-spread")]
 
 
 # ---------------------------------------------------------------------------
@@ -264,8 +281,10 @@ class TestGridLayoutUI:
         await user.open("/")
         await user.should_see("Center")  # grid layout active
         # Picking the other spread fires on_value_change → rebuild.
-        select = next(iter(user.find(ui.select).elements))
-        select.set_value("test-spread")
+        # With deck_options there are two selects; find the one labelled "Spread".
+        selects = list(user.find(ui.select).elements)
+        spread_select = next(s for s in selects if s.props.get("label") == "Spread")
+        spread_select.set_value("test-spread")
         # Row layout (no grid hints) renders the per-position detail buttons.
         await user.should_see("📋 Position 0")
         await user.should_see("Test Spread")  # title updated to the new spread
