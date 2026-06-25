@@ -640,6 +640,26 @@ class TestReadingPage:
         await user.should_see("UPRIGHT")
         await user.should_see("Summary")
 
+    async def test_dealing_flips_card_backs_to_faces(self, user: User) -> None:
+        await user.open("/")
+        # Before dealing: every card back is visible, every face image hidden.
+        with user.client:
+            backs = [e for e in ElementFilter(kind=ui.element) if "ft-card-back" in e._classes]
+            faces = list(ElementFilter(kind=ui.image))
+        assert backs, "expected card-back elements before dealing"
+        assert all("hidden" not in b._classes for b in backs)
+        assert all("hidden" in f._classes for f in faces)
+
+        user.find("New Reading").click()
+        await user.should_see("Summary")
+
+        # After dealing: every back is hidden and every face image is shown.
+        with user.client:
+            backs = [e for e in ElementFilter(kind=ui.element) if "ft-card-back" in e._classes]
+            faces = list(ElementFilter(kind=ui.image))
+        assert all("hidden" in b._classes for b in backs)
+        assert all("hidden" not in f._classes for f in faces)
+
 
 @pytest.mark.unit
 @pytest.mark.nicegui_main_file(_MAIN)
