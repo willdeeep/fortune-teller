@@ -19,8 +19,13 @@ import fortune_teller.application.ui.nicegui_app as nicegui_app_module
 from fortune_teller.application.models.domain import Spread, SpreadPosition
 from fortune_teller.application.services.loading import list_spread_ids, list_spreads
 from fortune_teller.application.ui.nicegui_app import (
+    _CARD_H,
+    _CARD_W,
+    _COLUMN_GAP,
+    _card_box_style,
     _effective_dimensions,
     _effective_grid,
+    _grid_container_style,
     _grid_dimensions,
     _has_grid_layout,
     _resolve_service,
@@ -201,6 +206,41 @@ class TestLayoutHelpers:
 
     def test_effective_dimensions_single_linear_row(self) -> None:
         assert _effective_dimensions([(0, 0), (0, 1), (0, 2)]) == (1, 3)
+
+
+# ---------------------------------------------------------------------------
+# Layout style helpers
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestLayoutStyles:
+    def test_column_gap_clears_rotated_overhang(self) -> None:
+        # A 90° card overhangs its cell by (H - W)/2 each side; the gap must be
+        # at least that so a crossing card never touches its neighbours.
+        assert _COLUMN_GAP >= (_CARD_H - _CARD_W) // 2
+
+    def test_grid_container_style_sets_fixed_track_sizes(self) -> None:
+        style = _grid_container_style(rows=4, cols=5)
+        assert "display:grid" in style
+        assert f"repeat(5,{_CARD_W}px)" in style
+        assert f"repeat(4,{_CARD_H}px)" in style
+        assert f"column-gap:{_COLUMN_GAP}px" in style
+
+    def test_card_box_style_places_cell_and_centres(self) -> None:
+        style = _card_box_style(row=2, col=1, z=3, rotation=0)
+        # CSS grid lines are 1-based, so row/col are offset by 1.
+        assert "grid-row:3" in style
+        assert "grid-column:2" in style
+        assert "place-self:center" in style
+        assert "z-index:3" in style
+        assert f"width:{_CARD_W}px" in style
+        assert f"height:{_CARD_H}px" in style
+        assert "rotate" not in style
+
+    def test_card_box_style_rotates_when_rotation_set(self) -> None:
+        style = _card_box_style(row=0, col=0, z=1, rotation=90)
+        assert "transform:rotate(90deg)" in style
 
 
 # ---------------------------------------------------------------------------

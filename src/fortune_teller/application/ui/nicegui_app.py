@@ -71,6 +71,29 @@ _service_cache: dict[tuple[str, str], ReadingService] = {}
 
 
 # ---------------------------------------------------------------------------
+# Card-box geometry constants
+# ---------------------------------------------------------------------------
+
+# Canonical card-box geometry (portrait ~2:3). Tunable via the screenshot harness.
+_CARD_W = 90
+_CARD_H = 135
+# A 90°-rotated box overhangs its cell by (H - W)/2 each side; the column gap must
+# clear that overhang so a crossing card never touches its horizontal neighbours.
+_COLUMN_GAP = (_CARD_H - _CARD_W) // 2 + 10  # == 32
+_ROW_GAP = 10
+
+# Generic CSS card back (no image asset; works for every deck). Per-deck art deferred.
+_CARD_BACK_STYLE = (
+    "flex:1;width:100%;"
+    "background:"
+    "radial-gradient(circle at 50% 50%, rgba(150,160,220,.35) 0 3px, transparent 4px),"
+    "repeating-linear-gradient(45deg, rgba(110,120,180,.30) 0 5px, rgba(80,90,150,.30) 5px 10px);"
+)
+# Face image fills the box, bounded so artwork can never overflow.
+_CARD_FACE_STYLE = "flex:1;width:100%;height:100%;object-fit:contain;"
+
+
+# ---------------------------------------------------------------------------
 # Framework-agnostic helpers
 # ---------------------------------------------------------------------------
 
@@ -360,11 +383,34 @@ def build_app(
         ui.page("/")(reading_page)
 
 
-_GRID_CARD_STYLE = (
-    "border:1px solid #888;border-radius:6px;padding:4px;"
-    "display:flex;flex-direction:column;align-items:center;"
-    "min-height:120px;max-width:90px;cursor:pointer;"
-)
+def _grid_container_style(rows: int, cols: int) -> str:
+    """CSS for the spread grid: fixed card-sized tracks + the overhang-clearing gap."""
+    return (
+        "display:grid;"
+        f"grid-template-columns:repeat({cols},{_CARD_W}px);"
+        f"grid-template-rows:repeat({rows},{_CARD_H}px);"
+        f"column-gap:{_COLUMN_GAP}px;row-gap:{_ROW_GAP}px;"
+        "justify-content:center;align-items:center;"
+    )
+
+
+def _card_box_style(row: int, col: int, z: int, rotation: int) -> str:
+    """CSS for one card box: cell placement, centring, stacking, and rotation.
+
+    *row*/*col* are 0-based effective-grid coordinates (CSS grid lines are
+    1-based, hence the ``+ 1``). Overlapping positions share a cell and are
+    centred via ``place-self`` with *z* controlling stack order; *rotation*
+    (e.g. 90° for the crossing card) rotates the whole box.
+    """
+    rot = f"transform:rotate({rotation}deg);" if rotation else ""
+    return (
+        f"grid-row:{row + 1};grid-column:{col + 1};place-self:center;z-index:{z};"
+        f"width:{_CARD_W}px;height:{_CARD_H}px;"
+        "border:1px solid #888;border-radius:8px;overflow:hidden;"
+        "display:flex;flex-direction:column;cursor:pointer;"
+        "box-shadow:0 1px 4px rgba(0,0,0,.3);"
+        f"{rot}"
+    )
 
 
 async def reading_page() -> None:  # noqa: PLR0915
@@ -542,7 +588,10 @@ def _build_card_grid(
             row_str = str((pos.row or 0) + 1)
             col_str = str((pos.col or 0) + 1)
             cell = ui.element("div").style(
-                f"grid-row:{row_str};grid-column:{col_str};{_GRID_CARD_STYLE}{rot}"
+                f"grid-row:{row_str};grid-column:{col_str};"
+                "border:1px solid #888;border-radius:6px;padding:4px;"
+                "display:flex;flex-direction:column;align-items:center;"
+                f"min-height:120px;max-width:90px;cursor:pointer;{rot}"
             )
             with cell:
                 title = (
