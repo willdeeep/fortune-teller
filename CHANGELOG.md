@@ -9,6 +9,8 @@ so a release is created by tagging — there is no version field to bump.
 
 ## [Unreleased]
 
+## [0.7.0] — 2026-06-25
+
 ### Added
 
 - **UI deck selection** (plan 0023) — a deck `ui.select` dropdown backed by
