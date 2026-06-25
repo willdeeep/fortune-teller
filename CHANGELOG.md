@@ -38,6 +38,13 @@ so a release is created by tagging — there is no version field to bump.
 
 ### Changed
 
+- **Usable spread layout** (plan 0036) — replaced the overflowing in-cell
+  interpretation text with a single spread-agnostic renderer: a spatial grid of
+  fixed-size card boxes (CSS card backs that flip to face images on deal, with a
+  true centred 90° crossing card) plus a numbered interpretation list below as
+  the source of truth for text. Fixes the unusable Celtic Cross spread that
+  blocked v0.7.0. Adds an opt-in, non-gating NiceGUI `Screen` screenshot harness
+  (`uv run pytest -m screen --no-cov`) for visual verification.
 - **Roadmap re-sequenced** (README Roadmap — the committed source of truth)
   after an in-browser UX review. **v0.7.0** is scoped to a _usable_ UI and gains
   a Celtic Cross layout fix (0036) — the grid previously rendered each card's
