@@ -7,6 +7,7 @@ dist/
 build/
 .eggs/
 *.so
+.superpowers
 
 # uv — keep uv.lock committed for reproducibility
 .venv/
@@ -22,6 +23,8 @@ htmlcov/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+tests/screen/_artifacts/
+screenshots/
 
 # Data — never commit scraped or generated data. Two committed exceptions:
 #   - data/models/ : offline embedding model (install destination for

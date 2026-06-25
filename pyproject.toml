@@ -49,6 +49,7 @@ test = [
     "hypothesis>=6.112",
     "coverage[toml]>=7.6",
     "pytest-asyncio>=0.24",
+    "selenium>=4.20",
 ]
 lint = [
     "ruff>=0.6",
@@ -108,13 +109,14 @@ module = [
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
-addopts = "-ra --strict-markers --cov=fortune_teller --cov-branch --cov-report=term-missing --cov-fail-under=80"
+addopts = "-ra --strict-markers --cov=fortune_teller --cov-branch --cov-report=term-missing --cov-fail-under=80 -m 'not screen'"
 testpaths = ["tests"]
 asyncio_mode = "auto"
 markers = [
     "unit: fast unit tests (pre-commit subset)",
     "integration: tests touching DuckDB/SQLite/HTTP fixtures",
     "slow: slow tests skipped from pre-commit",
+    "screen: Selenium-backed NiceGUI screenshot tests (opt-in, non-gating, not in CI)",
 ]
 
 [tool.coverage.run]

@@ -3,7 +3,9 @@
 Tests:
 - ``list_spreads`` loader function.
 - Celtic Cross spread JSON validation.
-- Layout helpers (``_has_grid_layout``, ``_grid_dimensions``).
+- Layout helpers (``_has_grid_layout``, ``_grid_dimensions``,
+  ``_effective_grid``, ``_effective_dimensions``) and the unified-renderer
+  style helpers (``_grid_container_style``, ``_card_box_style``) — plan 0036.
 """
 
 from __future__ import annotations
@@ -19,6 +21,13 @@ import fortune_teller.application.ui.nicegui_app as nicegui_app_module
 from fortune_teller.application.models.domain import Spread, SpreadPosition
 from fortune_teller.application.services.loading import list_spread_ids, list_spreads
 from fortune_teller.application.ui.nicegui_app import (
+    _CARD_H,
+    _CARD_W,
+    _COLUMN_GAP,
+    _card_box_style,
+    _effective_dimensions,
+    _effective_grid,
+    _grid_container_style,
     _grid_dimensions,
     _has_grid_layout,
     _resolve_service,
@@ -182,6 +191,59 @@ class TestLayoutHelpers:
         assert rows == 1
         assert cols == 1
 
+    def test_effective_grid_identity_for_grid_spread(self) -> None:
+        positions = [
+            _make_position(0, row=0, col=0),
+            _make_position(1, row=0, col=0, rotation=90),
+            _make_position(2, row=1, col=2),
+        ]
+        assert _effective_grid(positions) == [(0, 0), (0, 0), (1, 2)]
+
+    def test_effective_grid_linear_when_no_coords(self) -> None:
+        positions = [_make_position(0), _make_position(1), _make_position(2)]
+        assert _effective_grid(positions) == [(0, 0), (0, 1), (0, 2)]
+
+    def test_effective_dimensions_spans_coords(self) -> None:
+        assert _effective_dimensions([(0, 0), (0, 0), (1, 2)]) == (2, 3)
+
+    def test_effective_dimensions_single_linear_row(self) -> None:
+        assert _effective_dimensions([(0, 0), (0, 1), (0, 2)]) == (1, 3)
+
+
+# ---------------------------------------------------------------------------
+# Layout style helpers
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestLayoutStyles:
+    def test_column_gap_clears_rotated_overhang(self) -> None:
+        # A 90° card overhangs its cell by (H - W)/2 each side; the gap must be
+        # at least that so a crossing card never touches its neighbours.
+        assert _COLUMN_GAP >= (_CARD_H - _CARD_W) // 2
+
+    def test_grid_container_style_sets_fixed_track_sizes(self) -> None:
+        style = _grid_container_style(rows=4, cols=5)
+        assert "display:grid" in style
+        assert f"repeat(5,{_CARD_W}px)" in style
+        assert f"repeat(4,{_CARD_H}px)" in style
+        assert f"column-gap:{_COLUMN_GAP}px" in style
+
+    def test_card_box_style_places_cell_and_centres(self) -> None:
+        style = _card_box_style(row=2, col=1, z=3, rotation=0)
+        # CSS grid lines are 1-based, so row/col are offset by 1.
+        assert "grid-row:3" in style
+        assert "grid-column:2" in style
+        assert "place-self:center" in style
+        assert "z-index:3" in style
+        assert f"width:{_CARD_W}px" in style
+        assert f"height:{_CARD_H}px" in style
+        assert "rotate" not in style
+
+    def test_card_box_style_rotates_when_rotation_set(self) -> None:
+        style = _card_box_style(row=0, col=0, z=1, rotation=90)
+        assert "transform:rotate(90deg)" in style
+
 
 # ---------------------------------------------------------------------------
 # _resolve_service (spread → service resolution + caching)
@@ -279,12 +341,13 @@ class TestGridLayoutUI:
 
     async def test_switching_to_row_spread_rebuilds_layout(self, user: User) -> None:
         await user.open("/")
-        await user.should_see("Center")  # grid layout active
+        await user.should_see("Center")  # grid-coord spread active
         # Picking the other spread fires on_value_change → rebuild.
         # With deck_options there are two selects; find the one labelled "Spread".
         selects = list(user.find(ui.select).elements)
         spread_select = next(s for s in selects if s.props.get("label") == "Spread")
         spread_select.set_value("test-spread")
-        # Row layout (no grid hints) renders the per-position detail buttons.
-        await user.should_see("📋 Position 0")
+        # The unified renderer drops the old per-position 📋 button; the
+        # numbered list now exposes a "Details · <name>" button instead.
+        await user.should_see("Details · Position 0")
         await user.should_see("Test Spread")  # title updated to the new spread

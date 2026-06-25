@@ -12,9 +12,16 @@ The reading handler uses ``asyncio.to_thread`` for blocking LLM calls so the
 NiceGUI event loop stays responsive.  Card detail views use ``ui.dialog``
 for the modal overlay (plan 0024).
 
+Plan 0036 supersedes the 0030 grid/row split: *every* spread now renders
+through one :func:`_build_spread_layout` — a spatial grid of fixed-size card
+boxes (CSS card backs that flip to face images on deal) placed by an "effective
+grid" (:func:`_effective_grid`), with the interpretation **text** in a numbered
+list below the grid (:func:`_format_list_item`) so overlapping cards (the 90°
+crossing card sharing a cell) never hide it.
+
 Plan 0030 adds:
 - Spread selector (``ui.select``) backed by :func:`list_spreads`.
-- CSS-grid renderer for 2D spread layouts (e.g. Celtic Cross).
+- 2D spread layouts (e.g. Celtic Cross) with ``row``/``col``/``rotation`` hints.
 - Per-position ``transform:rotate()`` for the crossing card.
 
 Plan 0024 adds:
@@ -71,6 +78,29 @@ _service_cache: dict[tuple[str, str], ReadingService] = {}
 
 
 # ---------------------------------------------------------------------------
+# Card-box geometry constants
+# ---------------------------------------------------------------------------
+
+# Canonical card-box geometry (portrait ~2:3). Tunable via the screenshot harness.
+_CARD_W = 90
+_CARD_H = 135
+# A 90°-rotated box overhangs its cell by (H - W)/2 each side; the column gap must
+# clear that overhang so a crossing card never touches its horizontal neighbours.
+_COLUMN_GAP = (_CARD_H - _CARD_W) // 2 + 10  # == 32
+_ROW_GAP = 10
+
+# Generic CSS card back (no image asset; works for every deck). Per-deck art deferred.
+_CARD_BACK_STYLE = (
+    "flex:1;width:100%;"
+    "background:"
+    "radial-gradient(circle at 50% 50%, rgba(150,160,220,.35) 0 3px, transparent 4px),"
+    "repeating-linear-gradient(45deg, rgba(110,120,180,.30) 0 5px, rgba(80,90,150,.30) 5px 10px);"
+)
+# Face image fills the box, bounded so artwork can never overflow.
+_CARD_FACE_STYLE = "flex:1;width:100%;height:100%;object-fit:contain;"
+
+
+# ---------------------------------------------------------------------------
 # Framework-agnostic helpers
 # ---------------------------------------------------------------------------
 
@@ -107,6 +137,24 @@ def _format_card_text(
     if position_name and position_meaning:
         header += f"\n*{position_name}: {position_meaning}*"
     return f"{header}\n\n{text}"
+
+
+def _format_list_item(
+    number: int,
+    position_name: str,
+    card_name: str,
+    orientation: str,
+    text: str,
+) -> str:
+    """Render one numbered interpretation-list entry as Markdown.
+
+    The list beneath the spatial grid is the source of truth for interpretation
+    text, so this carries the full per-card body. Format:
+    ``**N. Position** · Card ▲ UPRIGHT`` then a blank line then the body.
+    """
+    arrow = "▼" if orientation == "reversed" else "▲"
+    label = "REVERSED" if orientation == "reversed" else "UPRIGHT"
+    return f"**{number}. {position_name}** · {card_name} {arrow} {label}\n\n{text}"
 
 
 def _format_card_detail(
@@ -254,10 +302,32 @@ def _grid_dimensions(positions: list[SpreadPosition]) -> tuple[int, int]:
     """Return ``(rows, cols)`` needed for a grid layout.
 
     Assumes all positions have ``row``/``col`` set (call after :func:`_has_grid_layout`).
+
+    Retained as a tested pure helper; the renderer itself sizes the grid via
+    :func:`_effective_dimensions` over :func:`_effective_grid` coords (plan 0036).
     """
     max_row = max(p.row for p in positions if p.row is not None)
     max_col = max(p.col for p in positions if p.col is not None)
     return (max_row + 1, max_col + 1)
+
+
+def _effective_grid(positions: list[SpreadPosition]) -> list[tuple[int, int]]:
+    """Return the ``(row, col)`` cell for each position.
+
+    Grid spreads (every position has ``row``/``col``) map to their own
+    coordinates; linear spreads (no coordinates) flow left→right as
+    ``row=0, col=index`` so they render through the same grid renderer.
+    """
+    if _has_grid_layout(positions):
+        return [(p.row or 0, p.col or 0) for p in positions]
+    return [(0, i) for i in range(len(positions))]
+
+
+def _effective_dimensions(coords: list[tuple[int, int]]) -> tuple[int, int]:
+    """Return ``(rows, cols)`` spanning the effective-grid *coords*."""
+    rows = max((r for r, _ in coords), default=0) + 1
+    cols = max((c for _, c in coords), default=0) + 1
+    return rows, cols
 
 
 def _resolve_service(deck_id: str, spread_id: str) -> ReadingService:
@@ -341,11 +411,34 @@ def build_app(
         ui.page("/")(reading_page)
 
 
-_GRID_CARD_STYLE = (
-    "border:1px solid #888;border-radius:6px;padding:4px;"
-    "display:flex;flex-direction:column;align-items:center;"
-    "min-height:120px;max-width:90px;cursor:pointer;"
-)
+def _grid_container_style(rows: int, cols: int) -> str:
+    """CSS for the spread grid: fixed card-sized tracks + the overhang-clearing gap."""
+    return (
+        "display:grid;"
+        f"grid-template-columns:repeat({cols},{_CARD_W}px);"
+        f"grid-template-rows:repeat({rows},{_CARD_H}px);"
+        f"column-gap:{_COLUMN_GAP}px;row-gap:{_ROW_GAP}px;"
+        "justify-content:center;align-items:center;"
+    )
+
+
+def _card_box_style(row: int, col: int, z: int, rotation: int) -> str:
+    """CSS for one card box: cell placement, centring, stacking, and rotation.
+
+    *row*/*col* are 0-based effective-grid coordinates (CSS grid lines are
+    1-based, hence the ``+ 1``). Overlapping positions share a cell and are
+    centred via ``place-self`` with *z* controlling stack order; *rotation*
+    (e.g. 90° for the crossing card) rotates the whole box.
+    """
+    rot = f"transform:rotate({rotation}deg);" if rotation else ""
+    return (
+        f"grid-row:{row + 1};grid-column:{col + 1};place-self:center;z-index:{z};"
+        f"width:{_CARD_W}px;height:{_CARD_H}px;"
+        "border:1px solid #888;border-radius:8px;overflow:hidden;"
+        "display:flex;flex-direction:column;cursor:pointer;"
+        "box-shadow:0 1px 4px rgba(0,0,0,.3);"
+        f"{rot}"
+    )
 
 
 async def reading_page() -> None:  # noqa: PLR0915
@@ -382,20 +475,22 @@ async def reading_page() -> None:  # noqa: PLR0915
     position_dialog, position_content = _build_position_dialog()
 
     card_images: list[ui.image] = []
-    card_texts: list[ui.markdown] = []
+    card_backs: list[ui.element] = []
+    card_items: list[ui.markdown] = []
 
-    card_container = ui.column().classes("w-full")
+    card_container = ui.column().classes("w-full items-center")
 
     def rebuild_card_panels() -> None:
-        """Clear and rebuild card panels for the current spread/deck."""
+        """Clear and rebuild the spread layout for the current spread/deck."""
         card_images.clear()
-        card_texts.clear()
+        card_backs.clear()
+        card_items.clear()
         state["dealt_ids"] = []
         card_container.clear()
         svc = _resolve_current_service(deck_select, spread_select)
         positions = svc._spread.positions
         with card_container:
-            _build_card_layout(
+            _build_spread_layout(
                 positions,
                 state,
                 detail_content,
@@ -403,7 +498,8 @@ async def reading_page() -> None:  # noqa: PLR0915
                 position_content,
                 position_dialog,
                 card_images,
-                card_texts,
+                card_backs,
+                card_items,
             )
 
     rebuild_card_panels()
@@ -435,7 +531,15 @@ async def reading_page() -> None:  # noqa: PLR0915
         positions = svc._spread.positions
         n = len(positions)
         await _run_reading(
-            svc, positions, n, state, card_images, card_texts, summary_md, new_reading_btn
+            svc,
+            positions,
+            n,
+            state,
+            card_images,
+            card_backs,
+            card_items,
+            summary_md,
+            new_reading_btn,
         )
 
     new_reading_btn.on_click(do_reading)
@@ -464,90 +568,55 @@ def _resolve_current_service(
     return _resolve_service(deck_id, spread_id)
 
 
-def _build_card_layout(
-    positions: list[SpreadPosition],
+def _build_card_box(
+    pos: SpreadPosition,
+    index: int,
+    row: int,
+    col: int,
     state: dict[str, list[str] | None],
     detail_content: ui.markdown,
     detail_dialog: ui.dialog,
     position_content: ui.markdown,
     position_dialog: ui.dialog,
     card_images: list[ui.image],
-    card_texts: list[ui.markdown],
+    card_backs: list[ui.element],
 ) -> None:
-    """Build card panels using grid or row layout based on position hints."""
-    if _has_grid_layout(positions):
-        _build_card_grid(
-            positions,
-            state,
-            detail_content,
-            detail_dialog,
-            position_content,
-            position_dialog,
-            card_images,
-            card_texts,
-        )
-    else:
-        _build_card_row(
-            positions,
-            state,
-            detail_content,
-            detail_dialog,
-            position_content,
-            position_dialog,
-            card_images,
-            card_texts,
-        )
+    """Build one fixed-size card box: name label, CSS back, hidden face image.
 
-
-def _build_card_grid(
-    positions: list[SpreadPosition],
-    state: dict[str, list[str] | None],
-    detail_content: ui.markdown,
-    detail_dialog: ui.dialog,
-    position_content: ui.markdown,
-    position_dialog: ui.dialog,
-    card_images: list[ui.image],
-    card_texts: list[ui.markdown],
-) -> None:
-    """Render cards in a CSS grid layout for 2D spreads (e.g. Celtic Cross)."""
-    rows, cols = _grid_dimensions(positions)
-    grid = ui.element("div").style(
-        f"display:grid;"
-        f"grid-template-columns:repeat({cols},100px);"
-        f"grid-template-rows:repeat({rows},150px);"
-        f"gap:8px;justify-content:center;"
+    The box opens the card-detail dialog on click; the name label opens the
+    position-meaning dialog (``stopPropagation`` keeps the two handlers apart).
+    The face image starts hidden and bounded by ``object-fit:contain`` so deal
+    just unhides it; the back starts visible so the spread's shape shows before
+    any card is dealt.
+    """
+    box = (
+        ui.element("div")
+        .classes("ft-card-box")
+        .style(_card_box_style(row, col, index, pos.rotation))
     )
-    with grid:
-        for i, pos in enumerate(positions):
-            rot = f"transform:rotate({pos.rotation}deg);" if pos.rotation else ""
-            row_str = str((pos.row or 0) + 1)
-            col_str = str((pos.col or 0) + 1)
-            cell = ui.element("div").style(
-                f"grid-row:{row_str};grid-column:{col_str};{_GRID_CARD_STYLE}{rot}"
-            )
-            with cell:
-                title = (
-                    ui.label(pos.name)
-                    .classes("text-xs font-bold text-center")
-                    .style("cursor:pointer;")
-                )
-                title.on(
-                    "click",
-                    lambda _, p=pos: _show_position_meaning(p, position_content, position_dialog),
-                    js_handler="(e) => { e.stopPropagation(); emit(e); }",
-                )
-                img = ui.image().classes("hidden").style("max-width:70px;max-height:100px;")
-                txt = ui.markdown().classes("hidden text-xs text-center")
-                card_images.append(img)
-                card_texts.append(txt)
+    with box:
+        title = (
+            ui.label(pos.name)
+            .classes("text-xs font-bold text-center")
+            .style("padding:2px;cursor:pointer;")
+        )
+        title.on(
+            "click",
+            lambda _, p=pos: _show_position_meaning(p, position_content, position_dialog),
+            js_handler="(e) => { e.stopPropagation(); emit(e); }",
+        )
+        back = ui.element("div").classes("ft-card-back").style(_CARD_BACK_STYLE)
+        img = ui.image().classes("ft-card-face hidden").style(_CARD_FACE_STYLE)
+        card_images.append(img)
+        card_backs.append(back)
 
-            cell.on(
-                "click",
-                lambda idx=i: _show_detail(idx, state, detail_content, detail_dialog),
-            )
+    box.on(
+        "click",
+        lambda idx=index: _show_detail(idx, state, detail_content, detail_dialog),
+    )
 
 
-def _build_card_row(
+def _build_spread_layout(
     positions: list[SpreadPosition],
     state: dict[str, list[str] | None],
     detail_content: ui.markdown,
@@ -555,25 +624,45 @@ def _build_card_row(
     position_content: ui.markdown,
     position_dialog: ui.dialog,
     card_images: list[ui.image],
-    card_texts: list[ui.markdown],
+    card_backs: list[ui.element],
+    card_items: list[ui.markdown],
 ) -> None:
-    """Render cards in a simple row layout (fallback for spreads without grid hints)."""
-    with ui.row().classes("w-full justify-center"):
+    """Render any spread: a spatial grid of card boxes + a numbered list below.
+
+    Every spread uses this one path. Card boxes are placed by the effective grid
+    (grid spreads keep their coords; linear spreads flow row 0, col=index).
+    Positions sharing a cell overlap (centred, stacked, rotated). The numbered
+    list beneath the grid is the source of truth for interpretation text; each
+    item has a ``Details · <name>`` button opening the card-detail dialog.
+    """
+    coords = _effective_grid(positions)
+    rows, cols = _effective_dimensions(coords)
+    grid = ui.element("div").style(_grid_container_style(rows, cols))
+    with grid:
+        for i, (pos, (row, col)) in enumerate(zip(positions, coords, strict=True)):
+            _build_card_box(
+                pos,
+                i,
+                row,
+                col,
+                state,
+                detail_content,
+                detail_dialog,
+                position_content,
+                position_dialog,
+                card_images,
+                card_backs,
+            )
+
+    with ui.column().classes("w-full max-w-2xl gap-1"):
         for i, pos in enumerate(positions):
-            with ui.card().classes("w-1/3 min-w-[200px]"):
-                title = ui.label(pos.name).classes("text-h6").style("cursor:pointer;")
-                title.on(
-                    "click",
-                    lambda _, p=pos: _show_position_meaning(p, position_content, position_dialog),
-                )
-                img = ui.image().classes("hidden")
-                txt = ui.markdown().classes("hidden")
-                card_images.append(img)
-                card_texts.append(txt)
+            with ui.row().classes("w-full items-start gap-2 ft-list-row"):
+                item = ui.markdown().classes("ft-list-item grow")
+                card_items.append(item)
                 ui.button(
-                    f"📋 {pos.name}",
+                    f"Details · {pos.name}",
                     on_click=lambda idx=i: _show_detail(idx, state, detail_content, detail_dialog),
-                )
+                ).props("flat dense")
 
 
 def _build_detail_dialog() -> tuple[ui.dialog, ui.markdown]:
@@ -610,17 +699,21 @@ async def _run_reading(
     n: int,
     state: dict[str, list[str] | None],
     card_images: list[ui.image],
-    card_texts: list[ui.markdown],
+    card_backs: list[ui.element],
+    card_items: list[ui.markdown],
     summary_md: ui.markdown,
     new_reading_btn: ui.button,
 ) -> None:
-    """Execute a full reading sequence with progressive UI updates."""
+    """Execute a reading: per card, flip its box back→face and fill its list item."""
     new_reading_btn.disable()
     state["dealt_ids"] = []
 
+    # Reset to the all-backs, empty-list state.
     for i in range(n):
-        card_images[i].set_source("").classes("hidden")
-        card_texts[i].set_content("").classes("hidden")
+        card_images[i].set_source("").classes(add="hidden")
+        card_images[i].style.pop("transform", None)
+        card_backs[i].classes(remove="hidden")
+        card_items[i].set_content("")
     summary_md.set_content("")
 
     try:
@@ -629,22 +722,23 @@ async def _run_reading(
         for i, pos in enumerate(positions):
             interp = await asyncio.to_thread(service.deal_next, handle)
 
-            panel = _format_card_text(
-                card_name=interp.card_name,
-                orientation=interp.dealt.orientation.value,
-                text=interp.text,
-                position_name=pos.name,
-                position_meaning=pos.meaning,
+            card_items[i].set_content(
+                _format_list_item(
+                    i + 1,
+                    pos.name,
+                    interp.card_name,
+                    interp.dealt.orientation.value,
+                    interp.text,
+                )
             )
-            card_texts[i].set_content(panel).classes(remove="hidden")
 
+            # Flip back→face; the face shows even without an image asset
+            # (blank/bordered), so the deal is always visible.
+            card_backs[i].classes(add="hidden")
             url = _image_url(interp.dealt.card_id)
-            if url is not None:
-                card_images[i].set_source(url).classes(remove="hidden")
-            else:
-                card_images[i].set_source("").classes("hidden")
+            card_images[i].set_source(url or "").classes(remove="hidden")
 
-            # Apply 180° rotation for reversed cards (plan 0025).
+            # Reversed cards rotate the face image 180° (plan 0025).
             rot = rotation_style(interp.dealt.orientation)
             if rot:
                 card_images[i].style(rot)

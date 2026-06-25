@@ -52,6 +52,7 @@ from fortune_teller.application.stores.vector import VectorStore
 from fortune_teller.application.ui.nicegui_app import (
     _format_card_detail,
     _format_card_text,
+    _format_list_item,
     _format_position_info,
     _format_reading_detail,
     _history_rows,
@@ -254,6 +255,31 @@ class TestFormatCardText:
     def test_position_meaning_omitted_when_none(self) -> None:
         out = _format_card_text("The Fool", "upright", "text")
         assert "*" not in out
+
+
+# ---------------------------------------------------------------------------
+# _format_list_item (framework-agnostic)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestFormatListItem:
+    def test_numbers_and_names_the_position_and_card(self) -> None:
+        out = _format_list_item(1, "Past", "The Fool", "upright", "Beginnings.")
+        assert out.startswith("**1. Past**")
+        assert "The Fool" in out
+        assert "▲ UPRIGHT" in out
+        assert "Beginnings." in out
+
+    def test_reversed_uses_down_arrow_and_label(self) -> None:
+        out = _format_list_item(2, "Present", "The Tower", "reversed", "Upheaval.")
+        assert "**2. Present**" in out
+        assert "▼ REVERSED" in out
+        assert "Upheaval." in out
+
+    def test_text_is_separated_from_header_by_blank_line(self) -> None:
+        out = _format_list_item(3, "Future", "The Star", "upright", "Hope.")
+        assert "\n\nHope." in out
 
 
 # ---------------------------------------------------------------------------
@@ -614,20 +640,40 @@ class TestReadingPage:
         await user.should_see("UPRIGHT")
         await user.should_see("Summary")
 
+    async def test_dealing_flips_card_backs_to_faces(self, user: User) -> None:
+        await user.open("/")
+        # Before dealing: every card back is visible, every face image hidden.
+        with user.client:
+            backs = [e for e in ElementFilter(kind=ui.element) if "ft-card-back" in e._classes]
+            faces = list(ElementFilter(kind=ui.image))
+        assert backs, "expected card-back elements before dealing"
+        assert all("hidden" not in b._classes for b in backs)
+        assert all("hidden" in f._classes for f in faces)
+
+        user.find("New Reading").click()
+        await user.should_see("Summary")
+
+        # After dealing: every back is hidden and every face image is shown.
+        with user.client:
+            backs = [e for e in ElementFilter(kind=ui.element) if "ft-card-back" in e._classes]
+            faces = list(ElementFilter(kind=ui.image))
+        assert all("hidden" in b._classes for b in backs)
+        assert all("hidden" not in f._classes for f in faces)
+
 
 @pytest.mark.unit
 @pytest.mark.nicegui_main_file(_MAIN)
 class TestDetailDialog:
     async def test_detail_button_before_reading_shows_placeholder(self, user: User) -> None:
         await user.open("/")
-        user.find("📋 Position 0").click()
+        user.find("Details · Position 0").click()
         await user.should_see("No card dealt")
 
     async def test_detail_dialog_shows_card_detail_after_reading(self, user: User) -> None:
         await user.open("/")
         user.find("New Reading").click()
         await user.should_see("Summary")
-        user.find("📋 Position 0").click()
+        user.find("Details · Position 0").click()
         # Stub cards have no sections, so the detail renders the fallback plus
         # the source-attribution link.
         await user.should_see("No structured data")
@@ -793,13 +839,13 @@ class TestFormatCardDetailSynergy:
 @pytest.mark.unit
 @pytest.mark.nicegui_main_file(_MAIN)
 class TestPositionMeaningDialog:
-    """Clicking a position title opens the meaning popover (row layout)."""
+    """Clicking a position title opens the meaning popover (unified renderer)."""
 
     async def test_click_position_title_opens_meaning(self, user: User) -> None:
         await user.open("/")
-        # The row layout renders the title as a ui.label ("Position 0")
-        # alongside the per-position "📋 Position 0" detail button.  Filter by
-        # kind to ensure we click the title label, not the button.
+        # Each card box renders its title as a ui.label ("Position 0"); filter by
+        # kind to click the title label (which opens the meaning dialog) rather
+        # than the position's "Details · Position 0" list button.
         user.find(kind=ui.label, content="Position 0").click()
         await user.should_see("Meaning of position 0.")
         await user.should_see("Source")
