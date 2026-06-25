@@ -410,6 +410,11 @@ def build_app(
     if reading_page not in Client.page_routes:
         ui.page("/")(reading_page)
 
+    def _on_unhandled_exception(exc: Exception) -> None:
+        ui.notify(f"Unexpected error: {exc}", type="negative")
+
+    app.on_exception(_on_unhandled_exception)
+
 
 def _grid_container_style(rows: int, cols: int) -> str:
     """CSS for the spread grid: fixed card-sized tracks + the overhang-clearing gap."""
@@ -751,6 +756,9 @@ async def _run_reading(
 
         reading = await asyncio.to_thread(service.finalize, handle)
         summary_md.set_content(f"**Summary:** {reading.summary}")
+    except Exception as exc:
+        summary_md.set_content(f"⚠️ Reading failed: {exc}")
+        ui.notify("Reading failed — see summary area for details.", type="negative")
     finally:
         new_reading_btn.enable()
 

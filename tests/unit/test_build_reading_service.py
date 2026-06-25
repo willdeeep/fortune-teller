@@ -102,7 +102,7 @@ class _StubVectorStore:
         self.opened = True
 
 
-def _make_stub_llm() -> RunnableLambda:
+def _make_stub_llm(*_args: object, **_kwargs: object) -> RunnableLambda:
     """Return a :class:`RunnableLambda` that pretends to be a chat model.
 
     LangChain's chain factory checks ``isinstance(llm, Runnable)``, and
@@ -110,6 +110,10 @@ def _make_stub_llm() -> RunnableLambda:
     the ``prompt | llm | parser`` operator. Each ``invoke`` returns an
     ``AIMessage`` so the subsequent ``StrOutputParser`` in the chain
     works as expected.
+
+    Accepts and ignores arbitrary arguments (e.g. ``timeout=``) so it
+    can stand in for :func:`build_chat_model` whose signature includes
+    a ``timeout`` parameter.
     """
 
     def _respond(_messages: object) -> AIMessage:
