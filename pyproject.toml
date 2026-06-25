@@ -14,7 +14,7 @@ dependencies = [
     "pydantic>=2.7",
     "pydantic-settings>=2.4",
     "duckdb>=1.1",
-    "gradio>=5.0",
+    "nicegui>=3.0",
     "httpx>=0.27",
     "platformdirs>=4.2",
 ]
@@ -30,7 +30,7 @@ dev = [
 ]
 
 [project.scripts]
-fortune-teller   = "fortune_teller.application.ui.app:main"
+fortune-teller   = "fortune_teller.application.ui.nicegui_app:main"
 ft-scrape        = "fortune_teller.developer.scrape.cli:app"
 ft-parse         = "fortune_teller.developer.parse.cli:app"
 ft-embed         = "fortune_teller.developer.embed.cli:app"
@@ -48,6 +48,8 @@ test = [
     "pytest-mock>=3.14",
     "hypothesis>=6.112",
     "coverage[toml]>=7.6",
+    "pytest-asyncio>=0.24",
+    "selenium>=4.20",
 ]
 lint = [
     "ruff>=0.6",
@@ -94,7 +96,7 @@ module = [
     "duckdb.*",
     "selectolax.*",
     "langchain_anthropic.*",
-    "gradio.*",
+    "nicegui.*",
     "langchain.*",
     "langchain_core.*",
     "langchain_openai.*",
@@ -107,12 +109,14 @@ module = [
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
-addopts = "-ra --strict-markers --cov=fortune_teller --cov-branch --cov-report=term-missing --cov-fail-under=80"
+addopts = "-ra --strict-markers --cov=fortune_teller --cov-branch --cov-report=term-missing --cov-fail-under=80 -m 'not screen'"
 testpaths = ["tests"]
+asyncio_mode = "auto"
 markers = [
     "unit: fast unit tests (pre-commit subset)",
     "integration: tests touching DuckDB/SQLite/HTTP fixtures",
     "slow: slow tests skipped from pre-commit",
+    "screen: Selenium-backed NiceGUI screenshot tests (opt-in, non-gating, not in CI)",
 ]
 
 [tool.coverage.run]

@@ -305,7 +305,7 @@ def build_reading_service(
       ``settings.ft_data_dir / "parsed"``.
 
     The returned service is ready to be passed to
-    :func:`~fortune_teller.application.ui.app.build_app`. The vector
+    :func:`~fortune_teller.application.ui.nicegui_app.build_app`. The vector
     store is left open for the lifetime of the process.
 
     Args:

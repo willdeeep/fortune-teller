@@ -55,9 +55,9 @@ ft-fetch-images      # download card artwork (--deck book-of-thoth|rider-waite|a
 - **`search_card_section` requires `deck_id`** — the SQL filters `AND deck_id = ?`; passing the wrong deck returns nothing.
 - **ChatOpenAI timeout is 180s** (not the default 60s) — CPU-only llama.cpp can take 120s on summary prompts.
 - **Images are deck-scoped**: `settings.images_dir / deck_id / card_id.<ext>`. Always pass `images_dir / service.deck_id`, never bare `images_dir`.
-- **Gradio `allowed_paths`** must include the deck image directory, or Gradio refuses to serve images.
+- **NiceGUI serves card images** via `app.add_static_files("/images", <deck image dir>)` in `build_app`; resolve URLs as `/images/<file>`, never filesystem paths in the browser.
 - **Typer CLI entry points** reference the Typer `app` object (e.g. `cli:app`), not a bare `main()` function — calling the function directly skips click argument parsing.
-- **Lazy imports** in `services/reading.py` and `ui/app.py` are intentional (`# noqa: PLC0415`) — they defer config and heavy service loads so test patches work correctly.
+- **Lazy imports** in `services/reading.py` and `ui/nicegui_app.py` are intentional (`# noqa: PLC0415`) — they defer config and heavy service loads so test patches work correctly.
 - **`langchain-anthropic` is a dev/optional dependency** — imported lazily inside functions in `developer/normalize/`, not at module level. The app runs without it; only `ft-normalize-rw` needs it.
 - **`Runnable[Any, Any]` not bare `Runnable`** — `langchain_core.runnables.Runnable` is generic; bare `Runnable` triggers mypy `type-arg` error.
 - **`data/` is gitignored** except `data/models/` (has `!data/models/` exception for the offline embedding model).

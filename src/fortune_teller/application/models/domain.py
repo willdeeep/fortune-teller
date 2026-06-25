@@ -152,7 +152,12 @@ class Deck(BaseModel):
 
 
 class SpreadPosition(BaseModel):
-    """One named position within a spread (e.g. 'Past', 'Present', 'Future')."""
+    """One named position within a spread (e.g. 'Past', 'Present', 'Future').
+
+    Optional layout fields (``row``, ``col``, ``rotation``) enable 2D spread
+    rendering (e.g. Celtic Cross).  When absent, the UI falls back to a simple
+    linear row layout.
+    """
 
     model_config = ConfigDict(frozen=True)
 
@@ -160,6 +165,9 @@ class SpreadPosition(BaseModel):
     name: Annotated[str, Field(min_length=1)]
     meaning: Annotated[str, Field(min_length=1)]
     source_url: HttpUrl
+    row: int | None = None  # grid placement (0-based)
+    col: int | None = None  # grid placement (0-based)
+    rotation: int = 0  # degrees; 90 for the crossing card
 
 
 class Spread(BaseModel):
