@@ -214,7 +214,7 @@ def _format_card_detail(
                 lines.append("")
 
     source_url = str(card.source_url)
-    lines.append(f"[View source ↗]({source_url})")
+    lines.append(f'<a href="{source_url}" target="_blank">View source ↗</a>')
 
     return "\n".join(lines)
 
@@ -225,7 +225,10 @@ def _format_position_info(
     source_url: str,
 ) -> str:
     """Render position meaning with a source link as a Markdown string."""
-    return f"**{position_name}:** {position_meaning}  \n[Source ↗]({source_url})"
+    return (
+        f"**{position_name}:** {position_meaning}  \n"
+        f'<a href="{source_url}" target="_blank">Source ↗</a>'
+    )
 
 
 def _format_reading_detail(reading_id: str, history_store: HistoryStore) -> str:

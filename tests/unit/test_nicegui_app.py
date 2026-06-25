@@ -345,7 +345,8 @@ class TestFormatCardDetail:
             source_url=HttpUrl("https://example.test/the-fool"),
         )
         result = _format_card_detail(card)
-        assert "[View source" in result
+        assert "View source" in result
+        assert 'target="_blank"' in result
         assert "https://example.test/the-fool" in result
 
     def test_includes_image_when_provided(self) -> None:
@@ -396,7 +397,9 @@ class TestFormatPositionInfo:
 
     def test_includes_source_link(self) -> None:
         result = _format_position_info("Present", "Current energy.", "https://example.test/spread")
-        assert "[Source ↗](https://example.test/spread)" in result
+        assert "Source ↗" in result
+        assert 'target="_blank"' in result
+        assert "https://example.test/spread" in result
 
 
 # ---------------------------------------------------------------------------
@@ -827,8 +830,8 @@ class TestFormatCardDetailSynergy:
         assert "**Reinforcing:** The Magician, The High Priestess" in result
         assert "**Opposing:** The Tower" in result
         # Reinforcing block comes before the source link.
-        assert result.index("**Reinforcing:**") < result.index("[View source ↗]")
-        assert result.index("**Opposing:**") < result.index("[View source ↗]")
+        assert result.index("**Reinforcing:**") < result.index("View source")
+        assert result.index("**Opposing:**") < result.index("View source")
 
 
 # ---------------------------------------------------------------------------
