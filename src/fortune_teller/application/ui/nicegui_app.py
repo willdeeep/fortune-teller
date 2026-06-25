@@ -132,6 +132,24 @@ def _format_card_text(
     return f"{header}\n\n{text}"
 
 
+def _format_list_item(
+    number: int,
+    position_name: str,
+    card_name: str,
+    orientation: str,
+    text: str,
+) -> str:
+    """Render one numbered interpretation-list entry as Markdown.
+
+    The list beneath the spatial grid is the source of truth for interpretation
+    text, so this carries the full per-card body. Format:
+    ``**N. Position** · Card ▲ UPRIGHT`` then a blank line then the body.
+    """
+    arrow = "▼" if orientation == "reversed" else "▲"
+    label = "REVERSED" if orientation == "reversed" else "UPRIGHT"
+    return f"**{number}. {position_name}** · {card_name} {arrow} {label}\n\n{text}"
+
+
 def _format_card_detail(
     card: Card,
     image_path: str | None = None,

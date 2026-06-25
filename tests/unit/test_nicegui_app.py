@@ -52,6 +52,7 @@ from fortune_teller.application.stores.vector import VectorStore
 from fortune_teller.application.ui.nicegui_app import (
     _format_card_detail,
     _format_card_text,
+    _format_list_item,
     _format_position_info,
     _format_reading_detail,
     _history_rows,
@@ -254,6 +255,31 @@ class TestFormatCardText:
     def test_position_meaning_omitted_when_none(self) -> None:
         out = _format_card_text("The Fool", "upright", "text")
         assert "*" not in out
+
+
+# ---------------------------------------------------------------------------
+# _format_list_item (framework-agnostic)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestFormatListItem:
+    def test_numbers_and_names_the_position_and_card(self) -> None:
+        out = _format_list_item(1, "Past", "The Fool", "upright", "Beginnings.")
+        assert out.startswith("**1. Past**")
+        assert "The Fool" in out
+        assert "▲ UPRIGHT" in out
+        assert "Beginnings." in out
+
+    def test_reversed_uses_down_arrow_and_label(self) -> None:
+        out = _format_list_item(2, "Present", "The Tower", "reversed", "Upheaval.")
+        assert "**2. Present**" in out
+        assert "▼ REVERSED" in out
+        assert "Upheaval." in out
+
+    def test_text_is_separated_from_header_by_blank_line(self) -> None:
+        out = _format_list_item(3, "Future", "The Star", "upright", "Hope.")
+        assert "\n\nHope." in out
 
 
 # ---------------------------------------------------------------------------
