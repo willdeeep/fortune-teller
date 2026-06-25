@@ -9,7 +9,61 @@ so a release is created by tagging — there is no version field to bump.
 
 ## [Unreleased]
 
-_Nothing yet._
+## [0.7.0] — 2026-06-25
+
+### Added
+
+- **UI deck selection** (plan 0023) — a deck `ui.select` dropdown backed by
+  `list_decks` lets the reader choose which deck a reading uses (e.g. Book of
+  Thoth vs Rider-Waite). Services are cached per `(deck_id, spread_id)` pair;
+  image URLs resolve from the parent `images_dir` using the current deck ID
+  (`/images/<deck_id>/<file>`). Single-deck setups render no selector
+  (back-compat). The title and history detail surface the deck name.
+- **Reversed card rotation** (plan 0025) — a reversed card's artwork is now
+  displayed rotated 180° via a native CSS `transform` on the image element
+  (`rotation_style` helper, applied in `_run_reading`); upright cards are
+  unchanged and the transform is cleared when a slot is re-dealt upright. No new
+  dependency (Pillow not required).
+- **Interactive detail views** (plan 0024) — clicking a position title opens a
+  `ui.dialog` showing the position's meaning + source link (grid and row
+  layouts; the grid title click stops propagation so it doesn't also open the
+  card detail). The card-detail dialog now lists reinforcing/opposing card
+  names, surfacing the v0.6.0 synergy data in the UI. Replaces the static
+  position-meanings markdown block with interactive popups.
+- **Complex spreads + Celtic Cross** (plan 0030) — `SpreadPosition` gains
+  optional `row`/`col`/`rotation` layout fields (linear row layout when absent).
+  The NiceGUI UI renders 2D spreads via a CSS grid (with a 90°-rotated crossing
+  card) and gains a spread selector (`ui.select`) so readers can switch spreads;
+  `list_spreads` exposes `(id, name)` options and a service factory builds a
+  reading service per spread. Ships the authored `celtic-cross.json` spread
+  (10 positions).
+
+### Changed
+
+- **Usable spread layout** (plan 0036) — replaced the overflowing in-cell
+  interpretation text with a single spread-agnostic renderer: a spatial grid of
+  fixed-size card boxes (CSS card backs that flip to face images on deal, with a
+  true centred 90° crossing card) plus a numbered interpretation list below as
+  the source of truth for text. Fixes the unusable Celtic Cross spread that
+  blocked v0.7.0. Adds an opt-in, non-gating NiceGUI `Screen` screenshot harness
+  (`uv run pytest -m screen --no-cov`) for visual verification.
+- **Roadmap re-sequenced** (README Roadmap — the committed source of truth)
+  after an in-browser UX review. **v0.7.0** is scoped to a _usable_ UI and gains
+  a Celtic Cross layout fix (0036) — the grid previously rendered each card's
+  full interpretation inside a 100px cell, so text overran and overlapped. UX
+  polish (dark theme, History on its own tab + a compact expandable table,
+  header reorganisation) splits into **v0.8.0** (0037), which also pulls in
+  post-reading **user notes** (0034) so the History redesign ships with notes.
+  **Added functionality** (manual card entry, framing question) moves to
+  **v0.9.0**; **single-user login** (0031) becomes its own **v0.10.0**.
+- **UI migrated from Gradio to NiceGUI** (plan 0035) — the `fortune-teller`
+  console script now launches a NiceGUI app (`application/ui/nicegui_app.py`,
+  on FastAPI). Card detail views use a real `ui.dialog` overlay instead of the
+  always-visible Markdown panel; the reading sequence updates progressively via
+  `asyncio.to_thread` for the blocking LLM calls. Framework-agnostic formatters
+  and the reading generator carried over unchanged. `gradio` is replaced by
+  `nicegui` in the dependencies. Establishes the framework for the v0.7.0 UI
+  work (0023/0024/0025/0030/0031).
 
 ## [0.6.1] — 2026-06-17
 
@@ -18,7 +72,7 @@ _Nothing yet._
 - **Untracked `.opencode/opencode.json`** — removed local editor config from
   version control (`git rm --cached`); the `.gitignore` `.opencode` rule keeps
   `.opencode/` and `.claude/` out going forward. A `.gitignore` rule can only
-  ignore files git is *not already tracking*, so the file had to be untracked
+  ignore files git is _not already tracking_, so the file had to be untracked
   explicitly. Dropped the redundant `.opencode/*` ignore line.
 
 ### Added

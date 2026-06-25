@@ -7,6 +7,7 @@ dist/
 build/
 .eggs/
 *.so
+.superpowers
 
 # uv — keep uv.lock committed for reproducibility
 .venv/
@@ -22,9 +23,23 @@ htmlcov/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+tests/screen/_artifacts/
+screenshots/
 
-# Data — never commit scraped or generated data
-data/
+# Data — never commit scraped or generated data. Two committed exceptions:
+#   - data/models/ : offline embedding model (install destination for
+#     ft-fetch-models; committed so the app runs offline after the one-time fetch)
+#   - data/parsed/spreads/celtic-cross.json : an authored (not scraped) spread,
+#     committed so it ships with the app
+# git only re-includes a path if its parent dirs are re-included first, hence the
+# cascade of un-ignore (!dir) then re-ignore (dir/*) at each level.
+data/*
+!data/models/
+!data/parsed/
+data/parsed/*
+!data/parsed/spreads/
+data/parsed/spreads/*
+!data/parsed/spreads/celtic-cross.json
 
 # Environment
 .env
@@ -49,7 +64,3 @@ data/
 *~
 .opencode
 .claude
-
-# Exception: data/models/ is the install destination for ft-fetch-models
-# and should be committed so the app can run offline after the one-time fetch
-!data/models/

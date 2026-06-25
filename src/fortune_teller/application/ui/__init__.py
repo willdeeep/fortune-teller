@@ -1,1 +1,1 @@
-"""Gradio UI package."""
+"""NiceGUI UI package."""

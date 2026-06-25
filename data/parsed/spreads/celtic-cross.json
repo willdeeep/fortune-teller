@@ -1,0 +1,96 @@
+{
+  "id": "celtic-cross",
+  "name": "Celtic Cross Spread",
+  "positions": [
+    {
+      "index": 0,
+      "name": "Present",
+      "meaning": "The current situation — what surrounds you right now.",
+      "source_url": "https://www.thetarotlady.com/breaking-celtic-cross-lesson-1-laying/",
+      "row": 2,
+      "col": 1,
+      "rotation": 0
+    },
+    {
+      "index": 1,
+      "name": "Challenge",
+      "meaning": "The crossing card — what crosses you, the obstacle or challenge.",
+      "source_url": "https://www.thetarotlady.com/breaking-celtic-cross-lesson-1-laying/",
+      "row": 2,
+      "col": 1,
+      "rotation": 90
+    },
+    {
+      "index": 2,
+      "name": "Foundation",
+      "meaning": "What is beneath you — the foundation, the root cause.",
+      "source_url": "https://www.thetarotlady.com/breaking-celtic-cross-lesson-1-laying/",
+      "row": 3,
+      "col": 1,
+      "rotation": 0
+    },
+    {
+      "index": 3,
+      "name": "Recent Past",
+      "meaning": "What is behind you — recent events that influence the present.",
+      "source_url": "https://www.thetarotlady.com/breaking-celtic-cross-lesson-1-laying/",
+      "row": 2,
+      "col": 0,
+      "rotation": 0
+    },
+    {
+      "index": 4,
+      "name": "Crown",
+      "meaning": "What is above you — possible futures, what is coming into awareness.",
+      "source_url": "https://www.thetarotlady.com/breaking-celtic-cross-lesson-1-laying/",
+      "row": 1,
+      "col": 1,
+      "rotation": 0
+    },
+    {
+      "index": 5,
+      "name": "Near Future",
+      "meaning": "What is before you — the near future, what is approaching.",
+      "source_url": "https://www.thetarotlady.com/breaking-celtic-cross-lesson-1-laying/",
+      "row": 2,
+      "col": 2,
+      "rotation": 0
+    },
+    {
+      "index": 6,
+      "name": "Self",
+      "meaning": "How you see yourself in the situation.",
+      "source_url": "https://www.thetarotlady.com/breaking-celtic-cross-lesson-1-laying/",
+      "row": 3,
+      "col": 4,
+      "rotation": 0
+    },
+    {
+      "index": 7,
+      "name": "Environment",
+      "meaning": "How others see you — your environment and external influences.",
+      "source_url": "https://www.thetarotlady.com/breaking-celtic-cross-lesson-1-laying/",
+      "row": 2,
+      "col": 4,
+      "rotation": 0
+    },
+    {
+      "index": 8,
+      "name": "Hopes and Fears",
+      "meaning": "What you hope for and what you fear — inner desires and anxieties.",
+      "source_url": "https://www.thetarotlady.com/breaking-celtic-cross-lesson-1-laying/",
+      "row": 1,
+      "col": 4,
+      "rotation": 0
+    },
+    {
+      "index": 9,
+      "name": "Outcome",
+      "meaning": "The final outcome — the ultimate resolution if things continue on this path.",
+      "source_url": "https://www.thetarotlady.com/breaking-celtic-cross-lesson-1-laying/",
+      "row": 0,
+      "col": 4,
+      "rotation": 0
+    }
+  ]
+}
