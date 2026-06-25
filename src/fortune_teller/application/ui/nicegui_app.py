@@ -12,9 +12,16 @@ The reading handler uses ``asyncio.to_thread`` for blocking LLM calls so the
 NiceGUI event loop stays responsive.  Card detail views use ``ui.dialog``
 for the modal overlay (plan 0024).
 
+Plan 0036 supersedes the 0030 grid/row split: *every* spread now renders
+through one :func:`_build_spread_layout` — a spatial grid of fixed-size card
+boxes (CSS card backs that flip to face images on deal) placed by an "effective
+grid" (:func:`_effective_grid`), with the interpretation **text** in a numbered
+list below the grid (:func:`_format_list_item`) so overlapping cards (the 90°
+crossing card sharing a cell) never hide it.
+
 Plan 0030 adds:
 - Spread selector (``ui.select``) backed by :func:`list_spreads`.
-- CSS-grid renderer for 2D spread layouts (e.g. Celtic Cross).
+- 2D spread layouts (e.g. Celtic Cross) with ``row``/``col``/``rotation`` hints.
 - Per-position ``transform:rotate()`` for the crossing card.
 
 Plan 0024 adds:
@@ -295,6 +302,9 @@ def _grid_dimensions(positions: list[SpreadPosition]) -> tuple[int, int]:
     """Return ``(rows, cols)`` needed for a grid layout.
 
     Assumes all positions have ``row``/``col`` set (call after :func:`_has_grid_layout`).
+
+    Retained as a tested pure helper; the renderer itself sizes the grid via
+    :func:`_effective_dimensions` over :func:`_effective_grid` coords (plan 0036).
     """
     max_row = max(p.row for p in positions if p.row is not None)
     max_col = max(p.col for p in positions if p.col is not None)

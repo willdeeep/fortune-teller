@@ -3,7 +3,9 @@
 Tests:
 - ``list_spreads`` loader function.
 - Celtic Cross spread JSON validation.
-- Layout helpers (``_has_grid_layout``, ``_grid_dimensions``).
+- Layout helpers (``_has_grid_layout``, ``_grid_dimensions``,
+  ``_effective_grid``, ``_effective_dimensions``) and the unified-renderer
+  style helpers (``_grid_container_style``, ``_card_box_style``) — plan 0036.
 """
 
 from __future__ import annotations
@@ -339,7 +341,7 @@ class TestGridLayoutUI:
 
     async def test_switching_to_row_spread_rebuilds_layout(self, user: User) -> None:
         await user.open("/")
-        await user.should_see("Center")  # grid layout active
+        await user.should_see("Center")  # grid-coord spread active
         # Picking the other spread fires on_value_change → rebuild.
         # With deck_options there are two selects; find the one labelled "Spread".
         selects = list(user.find(ui.select).elements)

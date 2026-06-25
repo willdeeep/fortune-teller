@@ -839,13 +839,13 @@ class TestFormatCardDetailSynergy:
 @pytest.mark.unit
 @pytest.mark.nicegui_main_file(_MAIN)
 class TestPositionMeaningDialog:
-    """Clicking a position title opens the meaning popover (row layout)."""
+    """Clicking a position title opens the meaning popover (unified renderer)."""
 
     async def test_click_position_title_opens_meaning(self, user: User) -> None:
         await user.open("/")
-        # The row layout renders the title as a ui.label ("Position 0")
-        # alongside the per-position "📋 Position 0" detail button.  Filter by
-        # kind to ensure we click the title label, not the button.
+        # Each card box renders its title as a ui.label ("Position 0"); filter by
+        # kind to click the title label (which opens the meaning dialog) rather
+        # than the position's "Details · Position 0" list button.
         user.find(kind=ui.label, content="Position 0").click()
         await user.should_see("Meaning of position 0.")
         await user.should_see("Source")
