@@ -19,6 +19,8 @@ import fortune_teller.application.ui.nicegui_app as nicegui_app_module
 from fortune_teller.application.models.domain import Spread, SpreadPosition
 from fortune_teller.application.services.loading import list_spread_ids, list_spreads
 from fortune_teller.application.ui.nicegui_app import (
+    _effective_dimensions,
+    _effective_grid,
     _grid_dimensions,
     _has_grid_layout,
     _resolve_service,
@@ -181,6 +183,24 @@ class TestLayoutHelpers:
         rows, cols = _grid_dimensions(positions)
         assert rows == 1
         assert cols == 1
+
+    def test_effective_grid_identity_for_grid_spread(self) -> None:
+        positions = [
+            _make_position(0, row=0, col=0),
+            _make_position(1, row=0, col=0, rotation=90),
+            _make_position(2, row=1, col=2),
+        ]
+        assert _effective_grid(positions) == [(0, 0), (0, 0), (1, 2)]
+
+    def test_effective_grid_linear_when_no_coords(self) -> None:
+        positions = [_make_position(0), _make_position(1), _make_position(2)]
+        assert _effective_grid(positions) == [(0, 0), (0, 1), (0, 2)]
+
+    def test_effective_dimensions_spans_coords(self) -> None:
+        assert _effective_dimensions([(0, 0), (0, 0), (1, 2)]) == (2, 3)
+
+    def test_effective_dimensions_single_linear_row(self) -> None:
+        assert _effective_dimensions([(0, 0), (0, 1), (0, 2)]) == (1, 3)
 
 
 # ---------------------------------------------------------------------------

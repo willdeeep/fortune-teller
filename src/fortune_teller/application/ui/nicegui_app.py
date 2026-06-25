@@ -260,6 +260,25 @@ def _grid_dimensions(positions: list[SpreadPosition]) -> tuple[int, int]:
     return (max_row + 1, max_col + 1)
 
 
+def _effective_grid(positions: list[SpreadPosition]) -> list[tuple[int, int]]:
+    """Return the ``(row, col)`` cell for each position.
+
+    Grid spreads (every position has ``row``/``col``) map to their own
+    coordinates; linear spreads (no coordinates) flow left→right as
+    ``row=0, col=index`` so they render through the same grid renderer.
+    """
+    if _has_grid_layout(positions):
+        return [(p.row or 0, p.col or 0) for p in positions]
+    return [(0, i) for i in range(len(positions))]
+
+
+def _effective_dimensions(coords: list[tuple[int, int]]) -> tuple[int, int]:
+    """Return ``(rows, cols)`` spanning the effective-grid *coords*."""
+    rows = max((r for r, _ in coords), default=0) + 1
+    cols = max((c for _, c in coords), default=0) + 1
+    return rows, cols
+
+
 def _resolve_service(deck_id: str, spread_id: str) -> ReadingService:
     """Return the service for ``(deck_id, spread_id)``, using cache or factory.
 
