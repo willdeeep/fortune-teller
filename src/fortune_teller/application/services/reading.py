@@ -328,6 +328,7 @@ def build_reading_service(
     from fortune_teller.application.chains.summary import (  # noqa: PLC0415
         build_summary_chain,
     )
+    from fortune_teller.application.config import summary_timeout  # noqa: PLC0415
     from fortune_teller.application.services.loading import (  # noqa: PLC0415
         load_deck,
         load_first_spread,
@@ -345,14 +346,17 @@ def build_reading_service(
     vector_store = VectorStore(str(db_path), dimension=embedder.dimension)
     vector_store.open()
 
-    llm = build_chat_model()
+    # Per-card prompts are small and finish quickly; the summary prompt grows
+    # linearly with position count, so its timeout must scale accordingly.
+    per_card_llm = build_chat_model()
+    summary_llm = build_chat_model(timeout=summary_timeout(len(spread.positions)))
 
     # ``build_per_card_chain`` / ``build_summary_chain`` return a generic
     # LangChain ``Runnable`` whose ``invoke`` signature is wider than the
     # ``InterpretationChain``/``SummaryChain`` Protocols expect. The
     # Protocols are satisfied at runtime; we cast here to keep mypy happy.
-    per_card_chain = cast(InterpretationChain, build_per_card_chain(llm))
-    summary_chain = cast(SummaryChain, build_summary_chain(llm))
+    per_card_chain = cast(InterpretationChain, build_per_card_chain(per_card_llm))
+    summary_chain = cast(SummaryChain, build_summary_chain(summary_llm))
 
     return ReadingService(
         deck=deck,
