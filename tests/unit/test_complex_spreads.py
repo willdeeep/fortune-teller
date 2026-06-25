@@ -345,6 +345,7 @@ class TestGridLayoutUI:
         selects = list(user.find(ui.select).elements)
         spread_select = next(s for s in selects if s.props.get("label") == "Spread")
         spread_select.set_value("test-spread")
-        # Row layout (no grid hints) renders the per-position detail buttons.
-        await user.should_see("📋 Position 0")
+        # The unified renderer drops the old per-position 📋 button; the
+        # numbered list now exposes a "Details · <name>" button instead.
+        await user.should_see("Details · Position 0")
         await user.should_see("Test Spread")  # title updated to the new spread

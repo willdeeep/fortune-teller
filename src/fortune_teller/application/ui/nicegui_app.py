@@ -465,20 +465,22 @@ async def reading_page() -> None:  # noqa: PLR0915
     position_dialog, position_content = _build_position_dialog()
 
     card_images: list[ui.image] = []
-    card_texts: list[ui.markdown] = []
+    card_backs: list[ui.element] = []
+    card_items: list[ui.markdown] = []
 
-    card_container = ui.column().classes("w-full")
+    card_container = ui.column().classes("w-full items-center")
 
     def rebuild_card_panels() -> None:
-        """Clear and rebuild card panels for the current spread/deck."""
+        """Clear and rebuild the spread layout for the current spread/deck."""
         card_images.clear()
-        card_texts.clear()
+        card_backs.clear()
+        card_items.clear()
         state["dealt_ids"] = []
         card_container.clear()
         svc = _resolve_current_service(deck_select, spread_select)
         positions = svc._spread.positions
         with card_container:
-            _build_card_layout(
+            _build_spread_layout(
                 positions,
                 state,
                 detail_content,
@@ -486,7 +488,8 @@ async def reading_page() -> None:  # noqa: PLR0915
                 position_content,
                 position_dialog,
                 card_images,
-                card_texts,
+                card_backs,
+                card_items,
             )
 
     rebuild_card_panels()
@@ -518,7 +521,15 @@ async def reading_page() -> None:  # noqa: PLR0915
         positions = svc._spread.positions
         n = len(positions)
         await _run_reading(
-            svc, positions, n, state, card_images, card_texts, summary_md, new_reading_btn
+            svc,
+            positions,
+            n,
+            state,
+            card_images,
+            card_backs,
+            card_items,
+            summary_md,
+            new_reading_btn,
         )
 
     new_reading_btn.on_click(do_reading)
@@ -547,93 +558,55 @@ def _resolve_current_service(
     return _resolve_service(deck_id, spread_id)
 
 
-def _build_card_layout(
-    positions: list[SpreadPosition],
+def _build_card_box(
+    pos: SpreadPosition,
+    index: int,
+    row: int,
+    col: int,
     state: dict[str, list[str] | None],
     detail_content: ui.markdown,
     detail_dialog: ui.dialog,
     position_content: ui.markdown,
     position_dialog: ui.dialog,
     card_images: list[ui.image],
-    card_texts: list[ui.markdown],
+    card_backs: list[ui.element],
 ) -> None:
-    """Build card panels using grid or row layout based on position hints."""
-    if _has_grid_layout(positions):
-        _build_card_grid(
-            positions,
-            state,
-            detail_content,
-            detail_dialog,
-            position_content,
-            position_dialog,
-            card_images,
-            card_texts,
-        )
-    else:
-        _build_card_row(
-            positions,
-            state,
-            detail_content,
-            detail_dialog,
-            position_content,
-            position_dialog,
-            card_images,
-            card_texts,
-        )
+    """Build one fixed-size card box: name label, CSS back, hidden face image.
 
-
-def _build_card_grid(
-    positions: list[SpreadPosition],
-    state: dict[str, list[str] | None],
-    detail_content: ui.markdown,
-    detail_dialog: ui.dialog,
-    position_content: ui.markdown,
-    position_dialog: ui.dialog,
-    card_images: list[ui.image],
-    card_texts: list[ui.markdown],
-) -> None:
-    """Render cards in a CSS grid layout for 2D spreads (e.g. Celtic Cross)."""
-    rows, cols = _grid_dimensions(positions)
-    grid = ui.element("div").style(
-        f"display:grid;"
-        f"grid-template-columns:repeat({cols},100px);"
-        f"grid-template-rows:repeat({rows},150px);"
-        f"gap:8px;justify-content:center;"
+    The box opens the card-detail dialog on click; the name label opens the
+    position-meaning dialog (``stopPropagation`` keeps the two handlers apart).
+    The face image starts hidden and bounded by ``object-fit:contain`` so deal
+    just unhides it; the back starts visible so the spread's shape shows before
+    any card is dealt.
+    """
+    box = (
+        ui.element("div")
+        .classes("ft-card-box")
+        .style(_card_box_style(row, col, index, pos.rotation))
     )
-    with grid:
-        for i, pos in enumerate(positions):
-            rot = f"transform:rotate({pos.rotation}deg);" if pos.rotation else ""
-            row_str = str((pos.row or 0) + 1)
-            col_str = str((pos.col or 0) + 1)
-            cell = ui.element("div").style(
-                f"grid-row:{row_str};grid-column:{col_str};"
-                "border:1px solid #888;border-radius:6px;padding:4px;"
-                "display:flex;flex-direction:column;align-items:center;"
-                f"min-height:120px;max-width:90px;cursor:pointer;{rot}"
-            )
-            with cell:
-                title = (
-                    ui.label(pos.name)
-                    .classes("text-xs font-bold text-center")
-                    .style("cursor:pointer;")
-                )
-                title.on(
-                    "click",
-                    lambda _, p=pos: _show_position_meaning(p, position_content, position_dialog),
-                    js_handler="(e) => { e.stopPropagation(); emit(e); }",
-                )
-                img = ui.image().classes("hidden").style("max-width:70px;max-height:100px;")
-                txt = ui.markdown().classes("hidden text-xs text-center")
-                card_images.append(img)
-                card_texts.append(txt)
+    with box:
+        title = (
+            ui.label(pos.name)
+            .classes("text-xs font-bold text-center")
+            .style("padding:2px;cursor:pointer;")
+        )
+        title.on(
+            "click",
+            lambda _, p=pos: _show_position_meaning(p, position_content, position_dialog),
+            js_handler="(e) => { e.stopPropagation(); emit(e); }",
+        )
+        back = ui.element("div").classes("ft-card-back").style(_CARD_BACK_STYLE)
+        img = ui.image().classes("ft-card-face hidden").style(_CARD_FACE_STYLE)
+        card_images.append(img)
+        card_backs.append(back)
 
-            cell.on(
-                "click",
-                lambda idx=i: _show_detail(idx, state, detail_content, detail_dialog),
-            )
+    box.on(
+        "click",
+        lambda idx=index: _show_detail(idx, state, detail_content, detail_dialog),
+    )
 
 
-def _build_card_row(
+def _build_spread_layout(
     positions: list[SpreadPosition],
     state: dict[str, list[str] | None],
     detail_content: ui.markdown,
@@ -641,25 +614,45 @@ def _build_card_row(
     position_content: ui.markdown,
     position_dialog: ui.dialog,
     card_images: list[ui.image],
-    card_texts: list[ui.markdown],
+    card_backs: list[ui.element],
+    card_items: list[ui.markdown],
 ) -> None:
-    """Render cards in a simple row layout (fallback for spreads without grid hints)."""
-    with ui.row().classes("w-full justify-center"):
+    """Render any spread: a spatial grid of card boxes + a numbered list below.
+
+    Every spread uses this one path. Card boxes are placed by the effective grid
+    (grid spreads keep their coords; linear spreads flow row 0, col=index).
+    Positions sharing a cell overlap (centred, stacked, rotated). The numbered
+    list beneath the grid is the source of truth for interpretation text; each
+    item has a ``Details · <name>`` button opening the card-detail dialog.
+    """
+    coords = _effective_grid(positions)
+    rows, cols = _effective_dimensions(coords)
+    grid = ui.element("div").style(_grid_container_style(rows, cols))
+    with grid:
+        for i, (pos, (row, col)) in enumerate(zip(positions, coords, strict=True)):
+            _build_card_box(
+                pos,
+                i,
+                row,
+                col,
+                state,
+                detail_content,
+                detail_dialog,
+                position_content,
+                position_dialog,
+                card_images,
+                card_backs,
+            )
+
+    with ui.column().classes("w-full max-w-2xl gap-1"):
         for i, pos in enumerate(positions):
-            with ui.card().classes("w-1/3 min-w-[200px]"):
-                title = ui.label(pos.name).classes("text-h6").style("cursor:pointer;")
-                title.on(
-                    "click",
-                    lambda _, p=pos: _show_position_meaning(p, position_content, position_dialog),
-                )
-                img = ui.image().classes("hidden")
-                txt = ui.markdown().classes("hidden")
-                card_images.append(img)
-                card_texts.append(txt)
+            with ui.row().classes("w-full items-start gap-2 ft-list-row"):
+                item = ui.markdown().classes("ft-list-item grow")
+                card_items.append(item)
                 ui.button(
-                    f"📋 {pos.name}",
+                    f"Details · {pos.name}",
                     on_click=lambda idx=i: _show_detail(idx, state, detail_content, detail_dialog),
-                )
+                ).props("flat dense")
 
 
 def _build_detail_dialog() -> tuple[ui.dialog, ui.markdown]:
@@ -696,17 +689,21 @@ async def _run_reading(
     n: int,
     state: dict[str, list[str] | None],
     card_images: list[ui.image],
-    card_texts: list[ui.markdown],
+    card_backs: list[ui.element],
+    card_items: list[ui.markdown],
     summary_md: ui.markdown,
     new_reading_btn: ui.button,
 ) -> None:
-    """Execute a full reading sequence with progressive UI updates."""
+    """Execute a reading: per card, flip its box back→face and fill its list item."""
     new_reading_btn.disable()
     state["dealt_ids"] = []
 
+    # Reset to the all-backs, empty-list state.
     for i in range(n):
-        card_images[i].set_source("").classes("hidden")
-        card_texts[i].set_content("").classes("hidden")
+        card_images[i].set_source("").classes(add="hidden")
+        card_images[i].style.pop("transform", None)
+        card_backs[i].classes(remove="hidden")
+        card_items[i].set_content("")
     summary_md.set_content("")
 
     try:
@@ -715,22 +712,23 @@ async def _run_reading(
         for i, pos in enumerate(positions):
             interp = await asyncio.to_thread(service.deal_next, handle)
 
-            panel = _format_card_text(
-                card_name=interp.card_name,
-                orientation=interp.dealt.orientation.value,
-                text=interp.text,
-                position_name=pos.name,
-                position_meaning=pos.meaning,
+            card_items[i].set_content(
+                _format_list_item(
+                    i + 1,
+                    pos.name,
+                    interp.card_name,
+                    interp.dealt.orientation.value,
+                    interp.text,
+                )
             )
-            card_texts[i].set_content(panel).classes(remove="hidden")
 
+            # Flip back→face; the face shows even without an image asset
+            # (blank/bordered), so the deal is always visible.
+            card_backs[i].classes(add="hidden")
             url = _image_url(interp.dealt.card_id)
-            if url is not None:
-                card_images[i].set_source(url).classes(remove="hidden")
-            else:
-                card_images[i].set_source("").classes("hidden")
+            card_images[i].set_source(url or "").classes(remove="hidden")
 
-            # Apply 180° rotation for reversed cards (plan 0025).
+            # Reversed cards rotate the face image 180° (plan 0025).
             rot = rotation_style(interp.dealt.orientation)
             if rot:
                 card_images[i].style(rot)

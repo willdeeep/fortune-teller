@@ -646,14 +646,14 @@ class TestReadingPage:
 class TestDetailDialog:
     async def test_detail_button_before_reading_shows_placeholder(self, user: User) -> None:
         await user.open("/")
-        user.find("📋 Position 0").click()
+        user.find("Details · Position 0").click()
         await user.should_see("No card dealt")
 
     async def test_detail_dialog_shows_card_detail_after_reading(self, user: User) -> None:
         await user.open("/")
         user.find("New Reading").click()
         await user.should_see("Summary")
-        user.find("📋 Position 0").click()
+        user.find("Details · Position 0").click()
         # Stub cards have no sections, so the detail renders the fallback plus
         # the source-attribution link.
         await user.should_see("No structured data")
