@@ -34,9 +34,16 @@ from fortune_teller.application.models.domain import (
 )
 from fortune_teller.application.stores.embeddings import Embedder
 
-# Load the NiceGUI ``User`` simulation fixtures (headless — no Selenium).  This
-# provides the ``user`` fixture used by the NiceGUI UI interaction tests.
-pytest_plugins = ["nicegui.testing.user_plugin"]
+# Load NiceGUI's pytest plugin. The full plugin provides both the headless
+# ``User`` fixture and the Selenium-backed ``Screen`` fixture but imports
+# selenium at import time; fall back to the headless-only plugin when selenium
+# is not installed so the default suite never needs a browser stack.
+try:
+    import selenium  # noqa: F401  # presence check only
+
+    pytest_plugins = ["nicegui.testing.plugin"]
+except ImportError:  # pragma: no cover - exercised only in selenium-free envs
+    pytest_plugins = ["nicegui.testing.user_plugin"]
 
 
 @pytest.fixture(autouse=True)
