@@ -42,7 +42,7 @@ from fortune_teller.developer.normalize.prompts import (
     REBUCKET_HUMAN,
     REBUCKET_SYSTEM,
 )
-from fortune_teller.developer.parse.learntarot import RawCard, resolve_card_names
+from fortune_teller.developer.parse.learntarot import RW_CARD_MAP, RawCard
 
 # ---------------------------------------------------------------------------
 # Provenance
@@ -255,10 +255,12 @@ def normalize_card(
     sections["overall"] = raw_card.description
     provenance["overall"] = Provenance.DETERMINISTIC
 
-    # Resolve reinforce/oppose names → IDs (deterministic, no LLM)
-    reinforcing_ids, unres_reinforce = resolve_card_names(raw_card.reinforcing_names)
-    opposing_ids, unres_oppose = resolve_card_names(raw_card.opposing_names)
-    unresolved_names = unres_reinforce + unres_oppose
+    # Resolve reinforce/oppose href slugs → card IDs (deterministic, no LLM).
+    # The parser already filtered to known RW_CARD_MAP slugs, so every slug
+    # resolves; the membership guard is belt-and-braces.
+    reinforcing_ids = [RW_CARD_MAP[s][0] for s in raw_card.reinforcing_slugs if s in RW_CARD_MAP]
+    opposing_ids = [RW_CARD_MAP[s][0] for s in raw_card.opposing_slugs if s in RW_CARD_MAP]
+    unresolved_names: list[str] = []
 
     # ---- Stage 1: re-bucket ----
     if llm is not None:
