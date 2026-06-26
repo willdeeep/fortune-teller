@@ -14,6 +14,7 @@ Politeness rules:
 from __future__ import annotations
 
 import asyncio
+import re
 from pathlib import Path
 
 import httpx
@@ -23,23 +24,31 @@ BASE_URL = "https://thothreadings.com"
 USER_AGENT = "fortune-teller/0.0.1 (+https://github.com/fortune-teller/fortune-teller)"
 REQUEST_DELAY_SECONDS = 1.0
 
-# Spread slugs are fetched from the site root (not /blog/)
-_SPREAD_SLUGS: frozenset[str] = frozenset({"spread-new-moon"})
-
 
 def _cache_path(cache_dir: Path, slug: str) -> Path:
     """Return the on-disk cache path for *slug*."""
     return cache_dir / f"{slug}.html"
 
 
-def _build_url(slug: str) -> str:
-    """Build the full URL for a card or spread slug.
+def _root_slug(slug: str) -> str:
+    """Map a blog slug to its root-page URL slug.
 
-    Card and spread pages both live at the site root ``/<slug>/``.
-    The old ``/blog/<slug>/`` pages are truncated summaries; the full
-    card definitions are on the root pages.
+    Major-arcana blog slugs carry a leading number/roman-numeral prefix
+    (``0-the-fool``, ``i-the-magician`` … ``xxi-the-universe``) that is absent
+    from the root definition-page URL (``/the-fool/``). Minor cards and spreads
+    have no such prefix and pass through unchanged.
     """
-    return f"{BASE_URL}/{slug}/"
+    return re.sub(r"^(?:0|[ivx]+)-", "", slug)
+
+
+def _build_url(slug: str) -> str:
+    """Build the full root-page URL for a card or spread slug.
+
+    Pages live at the site root ``/<slug>/`` (the old ``/blog/<slug>/`` pages
+    are truncated summaries). Major-arcana slugs have their number/roman-numeral
+    prefix stripped first — see :func:`_root_slug`.
+    """
+    return f"{BASE_URL}/{_root_slug(slug)}/"
 
 
 @retry(
