@@ -10,15 +10,17 @@ headings anchored by ``<a name="...">`` (``ACTIONS``, ``OPPOSING CARDS: ...``,
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
-from selectolax.parser import HTMLParser
+from selectolax.parser import HTMLParser, Node
 
 from fortune_teller.application.models.domain import Arcana, Suit
 from fortune_teller.developer.parse.learntarot import (
     _RW_BASE_URL,
     _extract_image_url,
+    _extract_synergy_slugs,
     parse_card_page,
-    resolve_card_names,
 )
 
 # ---------------------------------------------------------------------------
@@ -142,12 +144,12 @@ class TestParseMajorArcana:
         assert "beginning a new phase" in self.card.actions
         assert "striking out on a new path" in self.card.actions
 
-    def test_opposing_names_parsed(self) -> None:
-        # Names only — the "- meaning" sub-lines are dropped, no "The" prefix.
-        assert self.card.opposing_names == ["Hierophant", "Death"]
+    def test_opposing_slugs_parsed(self) -> None:
+        # Resolved by href slug, not link text.
+        assert self.card.opposing_slugs == ["maj05", "maj13"]
 
-    def test_reinforcing_names_parsed(self) -> None:
-        assert self.card.reinforcing_names == ["Star", "Judgement"]
+    def test_reinforcing_slugs_parsed(self) -> None:
+        assert self.card.reinforcing_slugs == ["maj17", "maj20"]
 
     def test_nav_menu_not_treated_as_section(self) -> None:
         # The bracketed "[ Actions ]" nav links must not create sections.
@@ -189,11 +191,11 @@ class TestParsePipCard:
     def test_actions_non_empty(self) -> None:
         assert "indulging in wishful thinking" in self.card.actions
 
-    def test_opposing_names_parsed(self) -> None:
-        assert self.card.opposing_names == ["Magician", "Emperor"]
+    def test_opposing_slugs_parsed(self) -> None:
+        assert self.card.opposing_slugs == ["maj01", "maj04"]
 
-    def test_reinforcing_names_parsed(self) -> None:
-        assert self.card.reinforcing_names == ["Devil", "Moon"]
+    def test_reinforcing_slugs_parsed(self) -> None:
+        assert self.card.reinforcing_slugs == ["maj15", "maj18"]
 
     def test_description_non_empty(self) -> None:
         assert "Seven of Cups" in self.card.description
@@ -233,8 +235,8 @@ class TestParseCourtCard:
 
     def test_court_cards_have_no_opposing_or_reinforcing(self) -> None:
         # learntarot court pages omit these sections entirely.
-        assert self.card.opposing_names == []
-        assert self.card.reinforcing_names == []
+        assert self.card.opposing_slugs == []
+        assert self.card.reinforcing_slugs == []
 
     def test_description_non_empty(self) -> None:
         assert "Page of Wands" in self.card.description
@@ -348,78 +350,42 @@ class TestExtractImageUrl:
 
 
 # ---------------------------------------------------------------------------
-# resolve_card_names
+# _extract_synergy_slugs — DOM href extraction (plan 0040, issue #40)
 # ---------------------------------------------------------------------------
+
+_FIXTURE_DIR = Path(__file__).parent.parent / "fixtures" / "html" / "learntarot"
+
+
+def _fixture_body(slug: str) -> Node:
+    """Parse a committed learntarot fixture page and return its ``<body>``."""
+    html = (_FIXTURE_DIR / f"{slug}.htm").read_text(encoding="utf-8")
+    body = HTMLParser(html).body
+    assert body is not None
+    return body
 
 
 @pytest.mark.unit
-class TestResolveCardNames:
-    """Tests for the name → ID resolution helper."""
+class TestExtractSynergySlugs:
+    """Resolution by href slug is immune to display-text quirks (issue #40)."""
 
-    def test_exact_name_match_returns_correct_id(self) -> None:
-        assert resolve_card_names(["The Fool"]) == (["the-fool"], [])
+    def test_clean_card_resolves_by_href_including_typo(self) -> None:
+        # w10's OPPOSING list contains 'Four o Swords' (a real source typo);
+        # its href is s4.htm, so it resolves correctly regardless of the text.
+        opposing, reinforcing = _extract_synergy_slugs(_fixture_body("w10"))
+        assert opposing == ["maj00", "maj12", "w4", "s4", "s7"]
+        assert reinforcing == ["maj11", "w5", "s6", "s9", "p5"]
 
-    def test_case_insensitive_match(self) -> None:
-        assert resolve_card_names(["the fool"]) == (["the-fool"], [])
+    def test_combined_heading_page_has_no_junk(self) -> None:
+        # p6 (Six of Pentacles) combines OPPOSING + REINFORCING under one
+        # heading with an explanatory paragraph; prose is not an anchor, so no
+        # junk leaks — the shared list flows to reinforcing, opposing is empty.
+        opposing, reinforcing = _extract_synergy_slugs(_fixture_body("p6"))
+        assert opposing == []
+        assert reinforcing == ["maj03", "maj21", "w10", "p5", "p7", "p10"]
 
-    def test_unresolvable_name_is_skipped(self) -> None:
-        resolved, unresolved = resolve_card_names(["Non Existent Card"])
-        assert resolved == []
-        assert unresolved == ["Non Existent Card"]
-
-    def test_empty_list_returns_empty_tuple(self) -> None:
-        assert resolve_card_names([]) == ([], [])
-
-    def test_mixed_resolvable_and_unresolvable(self) -> None:
-        resolved, unresolved = resolve_card_names(["The Fool", "Nonsense Card", "The Magician"])
-        assert resolved == ["the-fool", "the-magician"]
-        assert unresolved == ["Nonsense Card"]
-
-    def test_pip_card_resolved(self) -> None:
-        assert resolve_card_names(["Two of Wands"]) == (["two-of-wands"], [])
-
-    def test_court_card_resolved(self) -> None:
-        assert resolve_card_names(["Page of Cups"]) == (["page-of-cups"], [])
-
-    def test_stripped_whitespace_handled(self) -> None:
-        assert resolve_card_names(["  The Fool  "]) == (["the-fool"], [])
-
-    # ------------------------------------------------------------------
-    # Learntarot-specific name forms
-    # ------------------------------------------------------------------
-
-    def test_major_without_the_prefix_magician(self) -> None:
-        """Major arcana names without 'The' prefix — 'Magician'."""
-        assert resolve_card_names(["Magician"]) == (["the-magician"], [])
-
-    def test_major_without_the_prefix_devil(self) -> None:
-        assert resolve_card_names(["Devil"]) == (["the-devil"], [])
-
-    def test_major_without_the_prefix_star(self) -> None:
-        assert resolve_card_names(["Star"]) == (["the-star"], [])
-
-    def test_major_without_the_prefix_hierophant(self) -> None:
-        assert resolve_card_names(["Hierophant"]) == (["the-hierophant"], [])
-
-    def test_digit_rank_two_of_wands(self) -> None:
-        """Pip card with digit rank — '2 of Wands'."""
-        assert resolve_card_names(["2 of Wands"]) == (["two-of-wands"], [])
-
-    def test_digit_rank_seven_of_cups(self) -> None:
-        assert resolve_card_names(["7 of Cups"]) == (["seven-of-cups"], [])
-
-    def test_court_card_page_of_cups_matches_as_is(self) -> None:
-        """Court card 'Page of Cups' should match as-is."""
-        assert resolve_card_names(["Page of Cups"]) == (["page-of-cups"], [])
-
-    def test_nonsense_card_is_unresolved(self) -> None:
-        """An unrecognised name lands in the second element."""
-        resolved, unresolved = resolve_card_names(["Nonsense Card"])
-        assert resolved == []
-        assert unresolved == ["Nonsense Card"]
-
-    def test_mixed_the_fool_magician_and_nonsense(self) -> None:
-        """Mixed resolvable and unresolvable in a single call."""
-        resolved, unresolved = resolve_card_names(["The Fool", "Magician", "Nonsense"])
-        assert resolved == ["the-fool", "the-magician"]
-        assert unresolved == ["Nonsense"]
+    def test_heading_and_nav_links_are_not_card_slugs(self) -> None:
+        # Neither the 'howcard.htm#...' heading links nor the '#opposite' nav
+        # anchors are mistaken for card links.
+        opposing, reinforcing = _extract_synergy_slugs(_fixture_body("w10"))
+        assert "howcard" not in opposing + reinforcing
+        assert all("#" not in s for s in opposing + reinforcing)
