@@ -43,7 +43,7 @@ def _write_card(deck_dir: Path, slug: str, **overrides: Any) -> None:
             {"section": "drive", "text": f"Drive text for {slug}."},
             {"section": "light", "text": f"Light text for {slug}."},
         ],
-        "source_url": f"https://thothreadings.com/blog/{slug}/",
+        "source_url": f"https://thothreadings.com/{slug}/",
     }
     payload.update(overrides)
     deck_dir.mkdir(parents=True, exist_ok=True)

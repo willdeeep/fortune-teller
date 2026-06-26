@@ -20,7 +20,7 @@ from fortune_teller.developer.embed.chunker import (
     chunks_from_spread,
 )
 
-_SOURCE = "https://thothreadings.com/blog/0-the-fool/"
+_SOURCE = "https://thothreadings.com/0-the-fool/"
 _SPREAD_URL = "https://thothreadings.com/spread-new-moon/"
 
 

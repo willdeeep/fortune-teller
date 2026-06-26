@@ -35,12 +35,11 @@ def _cache_path(cache_dir: Path, slug: str) -> Path:
 def _build_url(slug: str) -> str:
     """Build the full URL for a card or spread slug.
 
-    Card pages live under ``/blog/<slug>/``.
-    Spread pages live at the site root ``/<slug>/``.
+    Card and spread pages both live at the site root ``/<slug>/``.
+    The old ``/blog/<slug>/`` pages are truncated summaries; the full
+    card definitions are on the root pages.
     """
-    if slug in _SPREAD_SLUGS:
-        return f"{BASE_URL}/{slug}/"
-    return f"{BASE_URL}/blog/{slug}/"
+    return f"{BASE_URL}/{slug}/"
 
 
 @retry(

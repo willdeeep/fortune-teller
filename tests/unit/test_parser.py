@@ -162,8 +162,9 @@ class TestParseTheFool:
     def test_source_url_contains_slug(self) -> None:
         assert "0-the-fool" in str(self.card.source_url)
 
-    def test_source_url_contains_blog(self) -> None:
-        assert "/blog/" in str(self.card.source_url)
+    def test_source_url_uses_root_path(self) -> None:
+        assert "/blog/" not in str(self.card.source_url)
+        assert "0-the-fool" in str(self.card.source_url)
 
     def test_drive_text_content(self) -> None:
         text = self.card.section_text(CardSection.DRIVE)
@@ -387,17 +388,18 @@ class TestLoadSlugs:
 
 @pytest.mark.unit
 class TestBuildUrl:
-    def test_card_uses_blog_prefix(self) -> None:
+    def test_card_uses_root_path(self) -> None:
         url = _build_url("0-the-fool")
-        assert url == "https://thothreadings.com/blog/0-the-fool/"
+        assert url == "https://thothreadings.com/0-the-fool/"
 
     def test_spread_uses_root(self) -> None:
         url = _build_url("spread-new-moon")
         assert url == "https://thothreadings.com/spread-new-moon/"
 
-    def test_minor_card_uses_blog_prefix(self) -> None:
+    def test_minor_card_uses_root_path(self) -> None:
         url = _build_url("ace-of-wands")
-        assert "blog" in url
+        assert "/blog/" not in url
+        assert url == "https://thothreadings.com/ace-of-wands/"
 
 
 # ---------------------------------------------------------------------------
