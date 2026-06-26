@@ -42,6 +42,7 @@ from fortune_teller.application.models.domain import (
     SpreadPosition,
     Suit,
 )
+from fortune_teller.developer.scrape.thothreadings import _root_slug
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -302,7 +303,7 @@ def parse_card_page(html: str, slug: str) -> Card:
 
     arcana, suit = _detect_arcana_and_suit(slug)
     number = _detect_number(slug, arcana)
-    source_url = f"{_BASE_URL}/{slug}/"
+    source_url = f"{_BASE_URL}/{_root_slug(slug)}/"
 
     sections: list[CardSectionText] = []
     overall_parts: list[str] = []

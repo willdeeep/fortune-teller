@@ -160,11 +160,11 @@ class TestParseTheFool:
         assert len(keys) == len(set(keys))
 
     def test_source_url_contains_slug(self) -> None:
-        assert "0-the-fool" in str(self.card.source_url)
+        assert "the-fool" in str(self.card.source_url)
 
     def test_source_url_uses_root_path(self) -> None:
         assert "/blog/" not in str(self.card.source_url)
-        assert "0-the-fool" in str(self.card.source_url)
+        assert "the-fool" in str(self.card.source_url)
 
     def test_drive_text_content(self) -> None:
         text = self.card.section_text(CardSection.DRIVE)
@@ -388,18 +388,25 @@ class TestLoadSlugs:
 
 @pytest.mark.unit
 class TestBuildUrl:
-    def test_card_uses_root_path(self) -> None:
-        url = _build_url("0-the-fool")
-        assert url == "https://thothreadings.com/0-the-fool/"
+    def test_major_strips_numeral_prefix(self) -> None:
+        # Major blog slugs carry a number/roman-numeral prefix that is absent
+        # from the root definition-page URL.
+        assert _build_url("0-the-fool") == "https://thothreadings.com/the-fool/"
+        assert _build_url("i-the-magician") == "https://thothreadings.com/the-magician/"
+        assert _build_url("xxi-the-universe") == "https://thothreadings.com/the-universe/"
 
     def test_spread_uses_root(self) -> None:
         url = _build_url("spread-new-moon")
         assert url == "https://thothreadings.com/spread-new-moon/"
 
-    def test_minor_card_uses_root_path(self) -> None:
-        url = _build_url("ace-of-wands")
-        assert "/blog/" not in url
-        assert url == "https://thothreadings.com/ace-of-wands/"
+    def test_minor_card_unchanged_at_root(self) -> None:
+        # Minor slugs have no prefix, so they pass through unchanged.
+        assert "/blog/" not in _build_url("ace-of-wands")
+        assert _build_url("ace-of-wands") == "https://thothreadings.com/ace-of-wands/"
+        assert (
+            _build_url("two-of-wands-dominion")
+            == "https://thothreadings.com/two-of-wands-dominion/"
+        )
 
 
 # ---------------------------------------------------------------------------
