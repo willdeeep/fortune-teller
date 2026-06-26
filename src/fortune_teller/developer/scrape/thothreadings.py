@@ -14,7 +14,6 @@ Politeness rules:
 from __future__ import annotations
 
 import asyncio
-import re
 from pathlib import Path
 
 import httpx
@@ -30,23 +29,39 @@ def _cache_path(cache_dir: Path, slug: str) -> Path:
     return cache_dir / f"{slug}.html"
 
 
-def _root_slug(slug: str) -> str:
-    """Map a blog slug to its root-page URL slug.
+# Most Book of Thoth seed slugs are already the root definition-page slug, but a
+# handful differ — Thoth renames (Magus, Priestess, Lust, Art) and a few site
+# inconsistencies (e.g. the Three of Wands). These map the seed slug to its real
+# root slug; everything else passes through unchanged. Sourced from
+# https://thothreadings.com/wp-sitemap.xml (verified 2026-06-26).
+_ROOT_SLUG_OVERRIDES: dict[str, str] = {
+    "0-the-fool": "the-fool",
+    "i-the-magician": "the-magician-the-magus",
+    "ii-the-high-priestess": "the-priestess-ii-the-high-priestess",
+    "xi-the-passion-lust": "xi-the-passion",
+    "xiv-the-art": "xiv-the-art-alchemy",
+    "the-three-of-wands": "three-of-wands-virtue",
+}
 
-    Major-arcana blog slugs carry a leading number/roman-numeral prefix
-    (``0-the-fool``, ``i-the-magician`` … ``xxi-the-universe``) that is absent
-    from the root definition-page URL (``/the-fool/``). Minor cards and spreads
-    have no such prefix and pass through unchanged.
+
+def _root_slug(slug: str) -> str:
+    """Map a seed slug to its root definition-page URL slug.
+
+    The seed slugs are mostly identical to the root-page slug; the few that
+    differ (see :data:`_ROOT_SLUG_OVERRIDES`) are mapped explicitly. There is no
+    clean transform — the root URL scheme is irregular (some majors keep their
+    numeral prefix, some drop it, some are renamed), so the mapping is authored
+    from the site sitemap rather than derived.
     """
-    return re.sub(r"^(?:0|[ivx]+)-", "", slug)
+    return _ROOT_SLUG_OVERRIDES.get(slug, slug)
 
 
 def _build_url(slug: str) -> str:
     """Build the full root-page URL for a card or spread slug.
 
     Pages live at the site root ``/<slug>/`` (the old ``/blog/<slug>/`` pages
-    are truncated summaries). Major-arcana slugs have their number/roman-numeral
-    prefix stripped first — see :func:`_root_slug`.
+    are truncated summaries). A few seeds map to a different root slug — see
+    :func:`_root_slug`.
     """
     return f"{BASE_URL}/{_root_slug(slug)}/"
 

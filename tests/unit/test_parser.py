@@ -388,12 +388,19 @@ class TestLoadSlugs:
 
 @pytest.mark.unit
 class TestBuildUrl:
-    def test_major_strips_numeral_prefix(self) -> None:
-        # Major blog slugs carry a number/roman-numeral prefix that is absent
-        # from the root definition-page URL.
+    def test_overridden_seeds_map_to_real_root_slug(self) -> None:
+        # A few seeds differ from the root page (Thoth renames + inconsistencies).
         assert _build_url("0-the-fool") == "https://thothreadings.com/the-fool/"
-        assert _build_url("i-the-magician") == "https://thothreadings.com/the-magician/"
-        assert _build_url("xxi-the-universe") == "https://thothreadings.com/the-universe/"
+        assert _build_url("i-the-magician") == "https://thothreadings.com/the-magician-the-magus/"
+        assert (
+            _build_url("the-three-of-wands") == "https://thothreadings.com/three-of-wands-virtue/"
+        )
+
+    def test_unmapped_card_passes_through(self) -> None:
+        # Most seeds are already the root slug — including majors that keep
+        # their numeral prefix.
+        assert _build_url("iii-the-empress") == "https://thothreadings.com/iii-the-empress/"
+        assert _build_url("xxi-the-universe") == "https://thothreadings.com/xxi-the-universe/"
 
     def test_spread_uses_root(self) -> None:
         url = _build_url("spread-new-moon")
