@@ -22,8 +22,7 @@ end of content) is treated as the position's meaning text.
 
 URL scheme
 ~~~~~~~~~~
-Card pages live at ``https://thothreadings.com/blog/<slug>/``.
-Spread pages live at ``https://thothreadings.com/<slug>/``.
+Card and spread pages both live at ``https://thothreadings.com/<slug>/``.
 """
 
 from __future__ import annotations
@@ -43,13 +42,13 @@ from fortune_teller.application.models.domain import (
     SpreadPosition,
     Suit,
 )
+from fortune_teller.developer.scrape.thothreadings import _root_slug
 
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
 
 _BASE_URL = "https://thothreadings.com"
-_BLOG_PREFIX = "/blog/"
 
 # Maps the bold label found on the page to our CardSection enum value.
 # Keys are lower-cased and stripped; the first match wins.
@@ -304,7 +303,7 @@ def parse_card_page(html: str, slug: str) -> Card:
 
     arcana, suit = _detect_arcana_and_suit(slug)
     number = _detect_number(slug, arcana)
-    source_url = f"{_BASE_URL}{_BLOG_PREFIX}{slug}/"
+    source_url = f"{_BASE_URL}/{_root_slug(slug)}/"
 
     sections: list[CardSectionText] = []
     overall_parts: list[str] = []

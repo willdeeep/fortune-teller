@@ -71,25 +71,26 @@ per_card_prompt: ChatPromptTemplate = ChatPromptTemplate.from_messages(
 # ---------------------------------------------------------------------------
 
 
-def build_chat_model() -> ChatOpenAI:
+def build_chat_model(timeout: float | None = None) -> ChatOpenAI:
     """Return a :class:`ChatOpenAI` configured for the local llama.cpp server.
 
     Settings are pulled from :class:`~fortune_teller.application.config.Settings`
     (env-driven). The model is initialised lazily by the caller — the first
     ``.invoke()`` triggers the HTTP connection.
+
+    Args:
+        timeout: HTTP client timeout in seconds. When ``None``, defaults to
+            ``settings.per_card_timeout`` (the per-card chain has small prompts
+            and finishes quickly). The summary chain should pass a larger
+            value scaled by the spread size — see
+            :func:`~fortune_teller.application.config.summary_timeout`.
     """
     return ChatOpenAI(
         base_url=settings.openai_base_url,
         api_key=settings.openai_api_key,
         model=settings.chat_model,
         temperature=0.0,
-        # 180s is a defensive upper bound for the largest prompt we send
-        # (the summary chain with three per-card interpretations plus the
-        # spread description). With llama-server running on the M2 GPU
-        # (the `-ngl 99` launch flag), the same call typically finishes in
-        # 5-10s. CPU-only fallback stays within the budget for the
-        # 4B-class model at Q5_K_M.
-        timeout=180,
+        timeout=settings.per_card_timeout if timeout is None else timeout,
         max_retries=2,
     )
 
