@@ -214,7 +214,7 @@ def _format_card_detail(
                 lines.append("")
 
     source_url = str(card.source_url)
-    lines.append(f"[View source ↗]({source_url})")
+    lines.append(f'<a href="{source_url}" target="_blank">View source ↗</a>')
 
     return "\n".join(lines)
 
@@ -225,7 +225,10 @@ def _format_position_info(
     source_url: str,
 ) -> str:
     """Render position meaning with a source link as a Markdown string."""
-    return f"**{position_name}:** {position_meaning}  \n[Source ↗]({source_url})"
+    return (
+        f"**{position_name}:** {position_meaning}  \n"
+        f'<a href="{source_url}" target="_blank">Source ↗</a>'
+    )
 
 
 def _format_reading_detail(reading_id: str, history_store: HistoryStore) -> str:
@@ -409,6 +412,11 @@ def build_app(
 
     if reading_page not in Client.page_routes:
         ui.page("/")(reading_page)
+
+    def _on_unhandled_exception(exc: Exception) -> None:
+        ui.notify(f"Unexpected error: {exc}", type="negative")
+
+    app.on_exception(_on_unhandled_exception)
 
 
 def _grid_container_style(rows: int, cols: int) -> str:
@@ -751,6 +759,9 @@ async def _run_reading(
 
         reading = await asyncio.to_thread(service.finalize, handle)
         summary_md.set_content(f"**Summary:** {reading.summary}")
+    except Exception as exc:
+        summary_md.set_content(f"⚠️ Reading failed: {exc}")
+        ui.notify("Reading failed — see summary area for details.", type="negative")
     finally:
         new_reading_btn.enable()
 

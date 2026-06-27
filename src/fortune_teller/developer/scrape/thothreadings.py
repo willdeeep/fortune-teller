@@ -23,24 +23,47 @@ BASE_URL = "https://thothreadings.com"
 USER_AGENT = "fortune-teller/0.0.1 (+https://github.com/fortune-teller/fortune-teller)"
 REQUEST_DELAY_SECONDS = 1.0
 
-# Spread slugs are fetched from the site root (not /blog/)
-_SPREAD_SLUGS: frozenset[str] = frozenset({"spread-new-moon"})
-
 
 def _cache_path(cache_dir: Path, slug: str) -> Path:
     """Return the on-disk cache path for *slug*."""
     return cache_dir / f"{slug}.html"
 
 
-def _build_url(slug: str) -> str:
-    """Build the full URL for a card or spread slug.
+# Most Book of Thoth seed slugs are already the root definition-page slug, but a
+# handful differ — Thoth renames (Magus, Priestess, Lust, Art) and a few site
+# inconsistencies (e.g. the Three of Wands). These map the seed slug to its real
+# root slug; everything else passes through unchanged. Sourced from
+# https://thothreadings.com/wp-sitemap.xml (verified 2026-06-26).
+_ROOT_SLUG_OVERRIDES: dict[str, str] = {
+    "0-the-fool": "the-fool",
+    "i-the-magician": "the-magician-the-magus",
+    "ii-the-high-priestess": "the-priestess-ii-the-high-priestess",
+    "xi-the-passion-lust": "xi-the-passion",
+    "xiv-the-art": "xiv-the-art-alchemy",
+    "the-three-of-wands": "three-of-wands-virtue",
+}
 
-    Card pages live under ``/blog/<slug>/``.
-    Spread pages live at the site root ``/<slug>/``.
+
+def _root_slug(slug: str) -> str:
+    """Map a seed slug to its root definition-page URL slug.
+
+    The seed slugs are mostly identical to the root-page slug; the few that
+    differ (see :data:`_ROOT_SLUG_OVERRIDES`) are mapped explicitly. There is no
+    clean transform — the root URL scheme is irregular (some majors keep their
+    numeral prefix, some drop it, some are renamed), so the mapping is authored
+    from the site sitemap rather than derived.
     """
-    if slug in _SPREAD_SLUGS:
-        return f"{BASE_URL}/{slug}/"
-    return f"{BASE_URL}/blog/{slug}/"
+    return _ROOT_SLUG_OVERRIDES.get(slug, slug)
+
+
+def _build_url(slug: str) -> str:
+    """Build the full root-page URL for a card or spread slug.
+
+    Pages live at the site root ``/<slug>/`` (the old ``/blog/<slug>/`` pages
+    are truncated summaries). A few seeds map to a different root slug — see
+    :func:`_root_slug`.
+    """
+    return f"{BASE_URL}/{_root_slug(slug)}/"
 
 
 @retry(

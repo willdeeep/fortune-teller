@@ -9,6 +9,36 @@ so a release is created by tagging — there is no version field to bump.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Reading resilience to LLM failures** (plan 0038, #45) — the per-card and
+  summary chains now use separate LLM clients with independent timeouts. The
+  summary timeout scales with spread size (`summary_timeout_base` 120s +
+  `summary_timeout_per_card` 12s × positions — a 10-card Celtic Cross gets
+  240s) instead of the old single 180s ceiling, so large spreads no longer fail
+  on slower local models. `_run_reading` now catches reading failures and shows
+  them in the summary area plus a toast instead of escaping and crashing
+  NiceGUI's background-task handler; `build_app` registers a global
+  `app.on_exception` safety net. New settings: `per_card_timeout`,
+  `summary_timeout_base`, `summary_timeout_per_card`.
+- **Thoth cards scraped from full definition pages** (plan 0039, #42) — the
+  Book of Thoth scraper now fetches card pages from the site root
+  (`thothreadings.com/<slug>/`) instead of the truncated `/blog/<slug>/`
+  summaries, so card definitions (and their embeddings) are complete and the
+  "View source" links resolve to the full pages. Removes the `/blog/` path
+  handling. Requires a deck-data rebuild to take effect.
+- **Rider-Waite reinforce/oppose synergy parsing** (plan 0040, #40) — the
+  learntarot parser now resolves reinforcing/opposing cards by the link's
+  **href slug** (the authoritative card id) via DOM extraction, instead of
+  parsing display text. Fixes silently-dropped links caused by split/mangled
+  headings, prose leaks, missing "of" (`Ten Wands`), source typos
+  (`Four o Swords`), and leaked markup, and removes the fragile name-resolution
+  layer (`resolve_card_names`, `_normalize_card_name`, `_split_names`, and the
+  overrides/digit maps). Requires a deck-data rebuild to take effect.
+- **Source-attribution links open in a new tab** (#41) — the card-detail
+  "View source" and position-meaning "Source" links now open in a new browser
+  tab (`target="_blank"`), so the reading isn't navigated away from.
+
 ## [0.7.0] — 2026-06-25
 
 ### Added

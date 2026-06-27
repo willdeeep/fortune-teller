@@ -160,10 +160,11 @@ class TestParseTheFool:
         assert len(keys) == len(set(keys))
 
     def test_source_url_contains_slug(self) -> None:
-        assert "0-the-fool" in str(self.card.source_url)
+        assert "the-fool" in str(self.card.source_url)
 
-    def test_source_url_contains_blog(self) -> None:
-        assert "/blog/" in str(self.card.source_url)
+    def test_source_url_uses_root_path(self) -> None:
+        assert "/blog/" not in str(self.card.source_url)
+        assert "the-fool" in str(self.card.source_url)
 
     def test_drive_text_content(self) -> None:
         text = self.card.section_text(CardSection.DRIVE)
@@ -387,17 +388,32 @@ class TestLoadSlugs:
 
 @pytest.mark.unit
 class TestBuildUrl:
-    def test_card_uses_blog_prefix(self) -> None:
-        url = _build_url("0-the-fool")
-        assert url == "https://thothreadings.com/blog/0-the-fool/"
+    def test_overridden_seeds_map_to_real_root_slug(self) -> None:
+        # A few seeds differ from the root page (Thoth renames + inconsistencies).
+        assert _build_url("0-the-fool") == "https://thothreadings.com/the-fool/"
+        assert _build_url("i-the-magician") == "https://thothreadings.com/the-magician-the-magus/"
+        assert (
+            _build_url("the-three-of-wands") == "https://thothreadings.com/three-of-wands-virtue/"
+        )
+
+    def test_unmapped_card_passes_through(self) -> None:
+        # Most seeds are already the root slug — including majors that keep
+        # their numeral prefix.
+        assert _build_url("iii-the-empress") == "https://thothreadings.com/iii-the-empress/"
+        assert _build_url("xxi-the-universe") == "https://thothreadings.com/xxi-the-universe/"
 
     def test_spread_uses_root(self) -> None:
         url = _build_url("spread-new-moon")
         assert url == "https://thothreadings.com/spread-new-moon/"
 
-    def test_minor_card_uses_blog_prefix(self) -> None:
-        url = _build_url("ace-of-wands")
-        assert "blog" in url
+    def test_minor_card_unchanged_at_root(self) -> None:
+        # Minor slugs have no prefix, so they pass through unchanged.
+        assert "/blog/" not in _build_url("ace-of-wands")
+        assert _build_url("ace-of-wands") == "https://thothreadings.com/ace-of-wands/"
+        assert (
+            _build_url("two-of-wands-dominion")
+            == "https://thothreadings.com/two-of-wands-dominion/"
+        )
 
 
 # ---------------------------------------------------------------------------

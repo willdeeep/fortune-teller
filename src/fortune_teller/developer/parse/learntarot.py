@@ -14,8 +14,9 @@ sections. Section headings are **uppercase anchor labels on their own line**
 
 Content for each section follows until the next heading (or the end of the
 page). Court cards omit the opposing/reinforcing sections. Opposing and
-reinforcing cards are ``<li><a>Name</a> - meaning`` items — only the names
-(non-``-`` lines) are captured.
+reinforcing cards are ``<li><a href="<slug>.htm">Name</a>`` items — the card
+identity comes from the **href slug** (see :func:`_extract_synergy_slugs`), not
+the display text, so typos/markup in the link text don't matter.
 
 URL scheme
 ~~~~~~~~~~
@@ -25,7 +26,6 @@ learntarot-internal abbreviation (e.g. ``maj00``, ``c7``, ``wpg``).
 
 from __future__ import annotations
 
-import logging
 import re
 from urllib.parse import urljoin
 
@@ -166,131 +166,45 @@ Contains exactly 78 entries (22 major + 56 minor).
 
 
 # ---------------------------------------------------------------------------
-# Name → ID resolution
+# Synergy extraction (DOM, by href slug)
 # ---------------------------------------------------------------------------
 
-# Learntarot uses display forms that differ from the canonical names in
-# RW_CARD_MAP.  The most common mismatches are:
-#
-#   - Majors without "The": "Magician" vs "The Magician", "Devil" vs "The Devil"
-#   - Numeric minors: "2 of Wands" vs "Two of Wands"
-#   - Pluralised suits: "Wand" vs "Wands" (rare but possible)
-#
-# The overrides map catches anything that still doesn't match after
-# normalisation.  Keys are the *normalised* lookup form (lowercase,
-# stripped of leading "the", digits→words, singularised suit suffix).
-_OVERRIDES: dict[str, str] = {
-    # Learntarot sometimes uses "Judgment" (US spelling) vs "Judgement"
-    "judgment": "judgement",
-    "world": "the-world",
-    "sun": "the-sun",
-    "moon": "the-moon",
-    "star": "the-star",
-    "tower": "the-tower",
-    "devil": "the-devil",
-    "hermit": "the-hermit",
-    "chariot": "the-chariot",
-    "lovers": "the-lovers",
-    "hierophant": "the-hierophant",
-    "emperor": "the-emperor",
-    "empress": "the-empress",
-    "high priestess": "the-high-priestess",
-    "magician": "the-magician",
-    "fool": "the-fool",
-}
 
-_DIGIT_TO_WORD: dict[str, str] = {
-    "1": "one",
-    "2": "two",
-    "3": "three",
-    "4": "four",
-    "5": "five",
-    "6": "six",
-    "7": "seven",
-    "8": "eight",
-    "9": "nine",
-    "10": "ten",
-}
+def _extract_synergy_slugs(body: Node) -> tuple[list[str], list[str]]:
+    """Return ``(opposing_slugs, reinforcing_slugs)`` from a learntarot card page.
 
+    The opposing/reinforcing lists are ``<li><a href="<slug>.htm">Name</a>``
+    items under the ``<a name="opposite">`` / ``<a name="reinforce">`` section
+    anchors.  The card identity lives in the **href slug** (``maj00``, ``s4``),
+    not the link text — so this is immune to the display-text quirks that broke
+    the old text parser (split/mangled headings, prose, missing "of", typos like
+    ``"Four o Swords"``, leaked markup).  Only hrefs whose slug is a known
+    :data:`RW_CARD_MAP` key are kept, which also filters out the ``howcard.htm``
+    heading links.
 
-def _normalize_card_name(name: str) -> str:
-    """Normalise a card display name into a canonical lookup key.
-
-    Steps:
-    1. Strip and lowercase.
-    2. Strip leading ``"the "`` (learntarot majors often omit it).
-    3. Replace digit ranks with word forms (``"2 of wands"`` → ``"two of wands"``).
-    4. Singularise common suit suffixes (``"wands"`` → ``"wand"``).
+    Court pages omit these sections, yielding two empty lists.  The Six of
+    Pentacles page combines both under one heading; its shared list flows to
+    *reinforcing* (opposing empty), with no junk.
     """
-    key = name.strip().lower()
-    # Strip leading "the " — learntarot majors often lack it
-    if key.startswith("the "):
-        key = key[4:]
-    # Replace digit ranks: "2 of wands" → "two of wands"
-    for digit, word in _DIGIT_TO_WORD.items():
-        key = key.replace(f"{digit} of ", f"{word} of ")
-    # Singularise suit suffixes for partial matches
-    for plural, singular in [
-        ("wands", "wand"),
-        ("cups", "cup"),
-        ("swords", "sword"),
-        ("pentacles", "pentacle"),
-        ("disks", "disk"),
-    ]:
-        if key.endswith(f" of {plural}"):
-            key = key[: -len(plural)] + singular
-    return key
-
-
-def resolve_card_names(names: list[str]) -> tuple[list[str], list[str]]:
-    """Resolve learntarot card display names to internal card IDs.
-
-    Names from learntarot.com use display forms like ``"2 of Wands"``,
-    ``"Page of Cups"``, ``"The Fool"`` — or ``"Magician"`` (without
-    "The").  The resolver normalises both the lookup name and the
-    canonical name before matching, and falls back to an overrides
-    map for anything that still doesn't resolve.
-
-    Unresolvable names are logged and skipped — graceful degradation
-    means a missing reinforce link is better than a crash.
-
-    Args:
-        names: Card display names as extracted from learntarot HTML.
-
-    Returns:
-        A ``(resolved_ids, unresolved_names)`` tuple.  ``resolved_ids``
-        preserves the input order with unresolvable entries dropped;
-        ``unresolved_names`` lists any names that could not be matched.
-    """
-    # Build normalised-name → id lookup from RW_CARD_MAP
-    name_to_id: dict[str, str] = {}
-    for entry in RW_CARD_MAP.values():
-        card_id, canonical_name = entry[0], entry[1]
-        normalised = _normalize_card_name(canonical_name)
-        name_to_id[normalised] = card_id
-        # Also register the canonical name lowercased (for exact matches)
-        name_to_id[canonical_name.lower()] = card_id
-
-    # Add overrides
-    for override_key, card_id in _OVERRIDES.items():
-        name_to_id[override_key] = card_id
-
-    resolved: list[str] = []
-    unresolved: list[str] = []
-    for name in names:
-        key = _normalize_card_name(name)
-        if key in name_to_id:
-            resolved.append(name_to_id[key])
-        elif name.strip().lower() in name_to_id:
-            resolved.append(name_to_id[name.strip().lower()])
-        else:
-            unresolved.append(name)
-            logging.getLogger(__name__).warning(
-                "Could not resolve card name %r (normalised %r) to an ID; skipping",
-                name,
-                key,
-            )
-    return resolved, unresolved
+    opposing: list[str] = []
+    reinforcing: list[str] = []
+    section: str | None = None
+    for anchor in body.css("a"):
+        name = anchor.attributes.get("name")
+        if name in {"actions", "opposite", "reinforce", "description"}:
+            section = name
+            continue
+        if section not in {"opposite", "reinforce"}:
+            continue
+        href = anchor.attributes.get("href") or ""
+        match = re.fullmatch(r"([a-z0-9]+)\.htm", href, re.IGNORECASE)
+        if match is None:
+            continue
+        slug = match.group(1).lower()
+        if slug not in RW_CARD_MAP:
+            continue
+        (opposing if section == "opposite" else reinforcing).append(slug)
+    return opposing, reinforcing
 
 
 # ---------------------------------------------------------------------------
@@ -315,8 +229,8 @@ class RawCard(BaseModel):
     number: int | None
     keywords: list[str]
     actions: list[str]
-    opposing_names: list[str]
-    reinforcing_names: list[str]
+    opposing_slugs: list[str]
+    reinforcing_slugs: list[str]
     description: str
     source_url: str
     image_url: str | None = None
@@ -331,23 +245,6 @@ def _extract_section_text(sections: dict[str, str], heading: str) -> str:
     """Return the cleaned text for *heading*, or empty string if missing."""
     raw = sections.get(heading, "")
     return re.sub(r"\s+", " ", raw).strip()
-
-
-def _split_names(text: str) -> list[str]:
-    """Extract card names from a learntarot opposing/reinforcing block.
-
-    Cards are listed one per line, each followed by an indented ``- meaning``
-    line; the names are the lines that do *not* start with ``-``. (Newlines
-    must be preserved in *text* — do not whitespace-collapse it first.)
-
-    Returns:
-        List of stripped, non-empty card-name strings.
-    """
-    return [
-        line.strip()
-        for line in text.split("\n")
-        if line.strip() and not line.strip().startswith("-")
-    ]
 
 
 def _extract_actions(raw: str) -> list[str]:
@@ -473,11 +370,10 @@ def parse_card_page(html: str, slug: str) -> RawCard:
     actions_raw = sections.get("ACTIONS", "")
     actions = _extract_actions(actions_raw)
 
-    # Extract opposing / reinforcing / description with whitespace normalisation
-    # Opposing/reinforcing blocks are newline-structured (name then "- meaning"),
-    # so split on the raw section text (newlines intact), not the collapsed form.
-    opposing_names = _split_names(sections.get("OPPOSING CARDS", ""))
-    reinforcing_names = _split_names(sections.get("REINFORCING CARDS", ""))
+    # Opposing/reinforcing card identities come from the <a href="<slug>.htm">
+    # links under each section anchor — the href slug is authoritative, not the
+    # display text. Description is still parsed from the text section.
+    opposing_slugs, reinforcing_slugs = _extract_synergy_slugs(body)
     description = _extract_section_text(sections, "DESCRIPTION")
 
     source_url = f"{_RW_BASE_URL}/{slug}.htm"
@@ -491,8 +387,8 @@ def parse_card_page(html: str, slug: str) -> RawCard:
         number=number,
         keywords=keywords,
         actions=actions,
-        opposing_names=opposing_names,
-        reinforcing_names=reinforcing_names,
+        opposing_slugs=opposing_slugs,
+        reinforcing_slugs=reinforcing_slugs,
         description=description,
         source_url=source_url,
         image_url=image_url,
