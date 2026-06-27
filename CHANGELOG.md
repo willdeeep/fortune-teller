@@ -9,6 +9,8 @@ so a release is created by tagging — there is no version field to bump.
 
 ## [Unreleased]
 
+## [0.7.1] — 2026-06-27
+
 ### Fixed
 
 - **Reading resilience to LLM failures** (plan 0038, #45) — the per-card and
