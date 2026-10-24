@@ -194,7 +194,7 @@ class TestCardSectionSearchRanking:
         assert len(hits) == 5
         assert hits[0].chunk.text == "chunk-7"
         # The second hit should be one of the orthogonal chunks (cosine 0)
-        # — the exact identity depends on the HNSW traversal, so we just
+        # — their order among equal scores is unspecified, so we just
         # assert it's not chunk-7 again.
         assert hits[1].chunk.text != "chunk-7"
 
