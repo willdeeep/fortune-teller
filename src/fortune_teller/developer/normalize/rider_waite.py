@@ -22,6 +22,7 @@ from __future__ import annotations
 import json
 import re
 import typing
+from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
 from typing import Any
@@ -64,6 +65,22 @@ class CardProvenance(BaseModel):
 
     card_id: str
     sections: dict[str, Provenance]  # section_name → provenance
+
+
+@dataclass(frozen=True)
+class NormalizeOutcome:
+    """What a deck-level normalisation run produced.
+
+    Returned by :func:`normalize_deck` and by the Thoth synergy synthesiser so
+    the CLIs can report partial failures and exit non-zero.
+
+    Attributes:
+        results: ``(Card, CardProvenance)`` for every card successfully processed.
+        failed: ``(card_id, error)`` for every card whose processing raised.
+    """
+
+    results: list[tuple[Card, CardProvenance]] = field(default_factory=list)
+    failed: list[tuple[str, str]] = field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
@@ -430,7 +447,7 @@ def normalize_deck(
     *,
     llm: Runnable[Any, Any] | None = None,
     only: set[str] | None = None,
-) -> list[tuple[Card, CardProvenance]]:
+) -> NormalizeOutcome:
     """Normalise all cards in a raw rider-waite directory.
 
     Args:
@@ -440,7 +457,8 @@ def normalize_deck(
         only: Optional set of card IDs to process (for re-running individuals).
 
     Returns:
-        List of ``(Card, CardProvenance)`` tuples for every processed card.
+        A :class:`NormalizeOutcome`: the successfully normalised cards, and
+        ``(card_id, error)`` for each card that failed (not written to disk).
     """
     out_dir.mkdir(parents=True, exist_ok=True)
     provenance_dir = out_dir / ".norm"
@@ -478,10 +496,6 @@ def normalize_deck(
         prov_path = provenance_dir / f"{raw_card.id}.json"
         prov_path.write_text(prov.model_dump_json(indent=2), encoding="utf-8")
 
-    if failed:
-        ids = ",".join(cid for cid, _ in failed)
-        print(f"\n{len(failed)} card(s) failed; re-run with: ft-normalize-rw --only {ids}")
-
     # Write deck metadata
     meta = {
         "id": "rider-waite",
@@ -497,4 +511,4 @@ def normalize_deck(
     report_path = out_dir / "_normalization_report.md"
     report_path.write_text(report, encoding="utf-8")
 
-    return results
+    return NormalizeOutcome(results=results, failed=failed)

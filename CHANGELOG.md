@@ -9,6 +9,17 @@ so a release is created by tagging — there is no version field to bump.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Normalisers report partial failures and exit 1** — `ft-normalize-rw`,
+  `ft-normalize-thoth` and `ft-normalize` still process every card, but now end
+  with a summary (`Normalized N cards; M failed:`), each failed card's error, and
+  a one-line retry command that repeats the run's `--provider`/`--model` (or
+  `--no-llm`) with `--only <failed ids>` — then exit 1. Previously they printed
+  a green success count and exited 0 even when cards failed. `ft-normalize`
+  runs both decks before exiting 1 if either had failures. The deck functions
+  now return a `NormalizeOutcome(results, failed)`.
+
 ### Changed
 
 - **Embedding model no longer offered for commit** — `data/models/` is now
