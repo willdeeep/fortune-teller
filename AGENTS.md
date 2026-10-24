@@ -51,7 +51,7 @@ ft-fetch-images      # download card artwork (--deck book-of-thoth|rider-waite|a
 ## Key gotchas
 
 - **Pydantic models are frozen** (`ConfigDict(frozen=True)`). Use `model.model_copy(update={...})`, never mutate.
-- **Vector store is DuckDB VSS** (HNSW, cosine, 384-dim) — not FAISS or Chroma.
+- **Vector store is DuckDB VSS** (cosine, 384-dim; an HNSW index is built but queries bypass it — see below) — not FAISS or Chroma.
 - **`search_card_section` requires `deck_id`** — the SQL filters `AND deck_id = ?`; passing the wrong deck returns nothing.
 - **Vector search is an exact scan on purpose.** Queries order by `array_cosine_similarity(...) DESC`, which bypasses the HNSW index. Do not "optimise" filtered searches to `ORDER BY array_cosine_distance(...) LIMIT k`: DuckDB's HNSW scan filters *after* its top-k and returns zero rows for one-card filters. `TestFilteredSearchUsesExactScan` guards this.
 - **ChatOpenAI timeout is 180s** (not the default 60s) — CPU-only llama.cpp can take 120s on summary prompts.

@@ -35,7 +35,7 @@ which are extracted by the parser and stored as separate vector chunks:
 - ~78 cards × ~11 sections ≈ ~858 vectors at 384 dimensions.
 - Metadata stored alongside each chunk: `deck_id`, `card_id`, `card_name`,
   `section`, `source_url`.
-- Retrieval uses cosine similarity via DuckDB HNSW index.
+- Retrieval uses an exact cosine-similarity scan in DuckDB, filtered to the dealt card (the HNSW index is built but deliberately bypassed; see plan 0041).
 
 ## Card ID Format
 

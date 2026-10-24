@@ -223,14 +223,14 @@ class VectorStore:
         )
 
         # HNSW index maintenance: rebuild after bulk inserts for small
-        # datasets (< 10k chunks). For the Book of Thoth (~860 chunks)
+        # datasets (< 10k chunks). For the Book of Thoth (~1,600 chunks)
         # this is cheap and avoids drift.
         self._rebuild_hnsw_index()
 
     def _rebuild_hnsw_index(self) -> None:
         """Drop and recreate the HNSW index.
 
-        Idempotent and cheap at our scale (~860 vectors). For larger
+        Idempotent and cheap at our scale (~1,600 vectors). For larger
         datasets, switch to incremental ``INSERT`` into the index.
         """
         conn = self._require_conn()
