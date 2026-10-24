@@ -9,6 +9,27 @@ so a release is created by tagging — there is no version field to bump.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Idempotent chunk IDs** (plan 0041) — chunk IDs are now deterministic
+  (`uuid5` of deck/card/section or spread/position) instead of random, so
+  `ft-build-index --no-rebuild` after re-running `ft-embed` no longer
+  duplicates every chunk. A card with two sections of the same kind now fails
+  `ft-embed` loudly instead of silently overwriting one. **After upgrading, run
+  `ft-embed` and then a full `ft-build-index` (the default rebuild, not
+  `--no-rebuild`) once**, because an existing index still holds the old random IDs.
+- **Thoth synergy failures are visible** (plan 0041) — a card whose LLM call
+  fails is no longer rewritten with empty reinforce/oppose IDs; it is left
+  unchanged on disk, excluded from the results, and listed under "Failed cards"
+  in `_synergy_report.md` with an `--only` retry command.
+- **Vector search shape locked in** (plan 0041) — regression tests ensure
+  filtered searches keep using an exact cosine scan; DuckDB's HNSW scan applies
+  filters after its top-k and returns zero rows for one-card filters. Comments,
+  `docs/architecture.md`, `docs/decks/book-of-thoth.md` and `AGENTS.md` no
+  longer claim searches use HNSW.
+- Docs: `AGENTS.md` provenance path (`.norm/`, not `_norm/`); `Embedder.embed_query`
+  docstring no longer claims a BGE query prefix is applied.
+
 ## [0.7.1] — 2026-06-27
 
 ### Fixed
