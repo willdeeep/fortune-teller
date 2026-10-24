@@ -223,7 +223,7 @@ class VectorStore:
         )
 
         # HNSW index maintenance: rebuild after bulk inserts for small
-        # datasets (< 10k chunks). For the Book of Thoth (~1,600 chunks)
+        # datasets (< 10k chunks). For both decks (~1,600 chunks)
         # this is cheap and avoids drift.
         self._rebuild_hnsw_index()
 
