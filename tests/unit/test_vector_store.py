@@ -15,7 +15,10 @@ import pytest
 from pydantic import HttpUrl
 
 from fortune_teller.application.models.domain import (
+    Arcana,
+    Card,
     CardSection,
+    CardSectionText,
     Chunk,
     ChunkType,
     SearchHit,
@@ -24,6 +27,7 @@ from fortune_teller.application.stores.vector import (
     DEFAULT_EMBEDDING_DIMENSION,
     VectorStore,
 )
+from fortune_teller.developer.embed.chunker import attach_embeddings, chunks_from_card
 
 DIM = 4  # tiny dimension for readable tests
 _SOURCE = "https://example.com/the-fool/"
@@ -445,3 +449,33 @@ class TestFilteredSearchUsesExactScan:
                 ).fetchall()
             )
             assert "HNSW" not in plan
+
+
+# ---------------------------------------------------------------------------
+# Re-embed idempotence (plan 0041)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestReembedIdempotence:
+    def test_appending_rechunked_card_does_not_duplicate(self) -> None:
+        card = Card(
+            id="the-fool",
+            name="The Fool",
+            arcana=Arcana.MAJOR,
+            sections=[
+                CardSectionText(section=CardSection.OVERALL, text="Beginnings."),
+                CardSectionText(section=CardSection.DRIVE, text="Spontaneity."),
+            ],
+            source_url=HttpUrl(_SOURCE),
+        )
+
+        def embedded_run() -> list[Chunk]:
+            # Simulates one ft-embed run: fresh chunking, then vectors attached.
+            chunks = chunks_from_card(card, deck_id="book-of-thoth")
+            return attach_embeddings(chunks, [_vector(1.0)] * len(chunks))
+
+        with VectorStore(":memory:", dimension=DIM) as store:
+            store.add_chunks(embedded_run())
+            store.add_chunks(embedded_run())  # == ft-build-index --no-rebuild after re-embed
+            assert store.count() == 2
