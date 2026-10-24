@@ -65,7 +65,7 @@ ft-fetch-images      # download card artwork (--deck book-of-thoth|rider-waite|a
 - **`.env` auto-loads** via pydantic-settings; stale values leak into tests. Clean it if tests behave strangely.
 - **`Suit.PENTACLES`** is for Rider-Waite; Thoth uses `Suit.DISKS`. Both are valid enum values; minor-arcana cards must carry the suit matching their deck.
 - **`meta.json`** in each deck directory (`data/parsed/<deck_id>/meta.json`) carries `name`, `source_url`, `attribution`, `description`. `load_deck` reads it; `list_decks()` uses it for display names. Card JSON files are loaded alongside it (excluded by glob).
-- **Normalization provenance** is stored in sidecar files (`data/parsed/rider-waite/_norm/<id>.json`), not in the `Card` domain model. A `_normalization_report.md` is also generated in the deck directory.
+- **Normalization provenance** is stored in sidecar files (`data/parsed/<deck_id>/.norm/<id>.json` — note the leading dot; written by both `ft-normalize-rw` and `ft-normalize-thoth`), not in the `Card` domain model. A `_normalization_report.md` (RW) or `_synergy_report.md` (Thoth) is also generated in the deck directory.
 - **`Card.image_url`** is `str | None` — populated by the parser from HTML, carried through normalization. Not all cards have images.
 - Config singleton: `from fortune_teller.application.config import settings`
 
