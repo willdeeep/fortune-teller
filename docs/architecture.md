@@ -28,7 +28,7 @@ data/embedded/<slug>.json               ← Chunks with embedding vectors
       ▼
 data/duckdb/fortune.duckdb
   └── chunks (id, type, card_id, section, text, embedding FLOAT[384])
-       └── HNSW index
+       └── HNSW index (built; queries use an exact scan — see Key Design Decisions)
 ```
 
 ## Runtime Data Flow (New Reading)
