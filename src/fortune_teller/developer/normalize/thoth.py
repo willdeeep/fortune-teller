@@ -143,7 +143,8 @@ def synthesize_deck_synergies(
         deck_id: Deck identifier (default ``"book-of-thoth"``).
 
     Returns:
-        List of ``(Card, CardProvenance)`` tuples for every processed card.
+        List of ``(Card, CardProvenance)`` tuples for every card successfully
+        processed; failed cards are excluded and listed in ``_synergy_report.md``.
     """
     deck = load_deck(parsed_dir, deck_id)
     provenance_dir = parsed_dir / deck_id / ".norm"
@@ -212,6 +213,11 @@ def synthesize_deck_synergies(
     return results
 
 
+def _table_cell(text: str) -> str:
+    """Make *text* safe for a single Markdown table cell (no pipes or newlines)."""
+    return " ".join(text.split()).replace("|", "\\|")
+
+
 def _generate_synergy_report(
     results: list[tuple[Card, CardProvenance]],
     *,
@@ -267,7 +273,7 @@ def _generate_synergy_report(
                 "",
                 "| Card | Error |",
                 "|------|-------|",
-                *(f"| {card_id} | {error} |" for card_id, error in failed),
+                *(f"| {card_id} | {_table_cell(error)} |" for card_id, error in failed),
                 "",
                 "Retry just these:",
                 "",

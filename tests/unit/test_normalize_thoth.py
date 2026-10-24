@@ -22,6 +22,7 @@ from fortune_teller.developer.normalize.rider_waite import CardProvenance, Prove
 from fortune_teller.developer.normalize.thoth import (
     _build_deck_card_list,
     _build_sections_text,
+    _generate_synergy_report,
     _parse_synergy_response,
     _validate_synergy_ids,
     synthesize_card_synergies,
@@ -498,12 +499,16 @@ class TestSynthesizeDeckSynergies:
         deck_dir = tmp_path / "parsed" / "book-of-thoth"
         card_path = deck_dir / "the-tower.json"
         before = card_path.read_text(encoding="utf-8")
+        sidecar = deck_dir / ".norm" / "the-tower.json"
+        sidecar.parent.mkdir(parents=True, exist_ok=True)
+        sidecar.write_text('{"card_id": "the-tower", "sections": {}}', encoding="utf-8")
+        sidecar_before = sidecar.read_bytes()
         llm = _stub_llm_failing_for(
             "The Tower", {"reinforcing_ids": ["the-fool"], "opposing_ids": []}
         )
         synthesize_deck_synergies(tmp_path / "parsed", llm=llm)
         assert card_path.read_text(encoding="utf-8") == before
-        assert not (deck_dir / ".norm" / "the-tower.json").exists()
+        assert sidecar.read_bytes() == sidecar_before
 
     def test_report_lists_failed_cards_with_retry_command(self, tmp_path: Path) -> None:
         self._populate_deck_dir(tmp_path / "parsed")
@@ -526,3 +531,10 @@ class TestSynthesizeDeckSynergies:
             encoding="utf-8"
         )
         assert "## Failed cards" not in report
+
+
+@pytest.mark.unit
+class TestGenerateSynergyReportFailed:
+    def test_error_text_escaped_for_table(self) -> None:
+        report = _generate_synergy_report([], failed=[("the-tower", "bad | thing\nhappened")])
+        assert "| the-tower | bad \\| thing happened |" in report
