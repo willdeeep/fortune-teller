@@ -1,9 +1,14 @@
 """DuckDB VSS vector store adapter.
 
 Single-file DuckDB database with the VSS extension loaded. Chunks are stored
-in a ``chunks`` table and indexed with an HNSW index using cosine similarity.
-This module hides all DuckDB-specific SQL behind a small Python API used by
-the rest of the application.
+in a ``chunks`` table. An HNSW index (cosine) is built, but **queries
+deliberately do not use it**: every runtime search is filtered to one card's
+~10 sections, and DuckDB's HNSW scan finds the global top-k *before* applying
+``WHERE`` — on a selective filter that returns too few or zero rows. Ordering by
+``array_cosine_similarity(...) DESC`` forces an exact scan, which is correct and
+takes milliseconds at this scale (see plan 0041 and
+``TestFilteredSearchUsesExactScan``). This module hides all DuckDB-specific SQL
+behind a small Python API used by the rest of the application.
 
 Typical usage::
 
@@ -218,14 +223,14 @@ class VectorStore:
         )
 
         # HNSW index maintenance: rebuild after bulk inserts for small
-        # datasets (< 10k chunks). For the Book of Thoth (~860 chunks)
+        # datasets (< 10k chunks). For both decks (~1,600 chunks)
         # this is cheap and avoids drift.
         self._rebuild_hnsw_index()
 
     def _rebuild_hnsw_index(self) -> None:
         """Drop and recreate the HNSW index.
 
-        Idempotent and cheap at our scale (~860 vectors). For larger
+        Idempotent and cheap at our scale (~1,600 vectors). For larger
         datasets, switch to incremental ``INSERT`` into the index.
         """
         conn = self._require_conn()
@@ -237,7 +242,13 @@ class VectorStore:
     # ------------------------------------------------------------------
 
     def _search_sql(self) -> str:
-        """Return the similarity-ranked SELECT statement.
+        """Return the similarity-ranked SELECT statement (exact scan).
+
+        Ranking by ``array_cosine_similarity(...) DESC`` is intentional: it is
+        not an HNSW-eligible shape, so DuckDB scans every candidate row and
+        filtered searches always return up to *k* rows. Do not switch to
+        ``ORDER BY array_cosine_distance(...) LIMIT k`` for filtered queries —
+        see :class:`VectorStore` and plan 0041.
 
         The cast ``?::FLOAT[N]`` is templated against the store's
         dimension because DuckDB's ``array_cosine_similarity`` only
@@ -259,7 +270,7 @@ class VectorStore:
     ) -> list[SearchHit]:
         """Return the *k* chunks most similar to *query_embedding*.
 
-        Uses cosine similarity (HNSW index). Hits are returned in
+        Uses cosine similarity (exact scan; see :meth:`_search_sql`). Hits are returned in
         descending similarity order.
 
         Args:

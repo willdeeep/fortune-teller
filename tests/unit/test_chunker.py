@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import uuid
+
 import pytest
 from pydantic import HttpUrl
 
@@ -15,6 +17,7 @@ from fortune_teller.application.models.domain import (
     SpreadPosition,
 )
 from fortune_teller.developer.embed.chunker import (
+    CHUNK_ID_NAMESPACE,
     attach_embeddings,
     chunks_from_card,
     chunks_from_spread,
@@ -225,3 +228,55 @@ class TestAttachEmbeddings:
 
     def test_empty_inputs(self) -> None:
         assert attach_embeddings([], []) == []
+
+
+# ---------------------------------------------------------------------------
+# Deterministic chunk IDs (plan 0041)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestDeterministicChunkIds:
+    def test_card_chunk_ids_stable_across_runs(self, card: Card) -> None:
+        first = [c.id for c in chunks_from_card(card, deck_id="book-of-thoth")]
+        second = [c.id for c in chunks_from_card(card, deck_id="book-of-thoth")]
+        assert first == second
+
+    def test_card_chunk_ids_unique_per_section(self, card: Card) -> None:
+        ids = [c.id for c in chunks_from_card(card, deck_id="book-of-thoth")]
+        assert len(ids) == len(set(ids))
+
+    def test_card_chunk_ids_differ_across_decks(self, card: Card) -> None:
+        thoth = {c.id for c in chunks_from_card(card, deck_id="book-of-thoth")}
+        rw = {c.id for c in chunks_from_card(card, deck_id="rider-waite")}
+        assert thoth.isdisjoint(rw)
+
+    def test_card_chunk_id_matches_documented_scheme(self, card: Card) -> None:
+        chunk = chunks_from_card(card, deck_id="book-of-thoth")[0]
+        expected = uuid.uuid5(CHUNK_ID_NAMESPACE, "card_section:book-of-thoth:0-the-fool:overall")
+        assert chunk.id == expected
+
+    def test_spread_chunk_ids_stable_and_unique(self, spread: Spread) -> None:
+        first = [c.id for c in chunks_from_spread(spread)]
+        second = [c.id for c in chunks_from_spread(spread)]
+        assert first == second
+        assert len(set(first)) == len(spread.positions)
+
+    def test_spread_chunk_id_matches_documented_scheme(self, spread: Spread) -> None:
+        chunk = chunks_from_spread(spread)[1]
+        expected = uuid.uuid5(CHUNK_ID_NAMESPACE, "spread_position:new-moon-three-card:1")
+        assert chunk.id == expected
+
+    def test_duplicate_section_kind_raises(self) -> None:
+        card = Card(
+            id="dup",
+            name="Dup",
+            arcana=Arcana.MAJOR,
+            sections=[
+                CardSectionText(section=CardSection.ADVICE, text="one"),
+                CardSectionText(section=CardSection.ADVICE, text="two"),
+            ],
+            source_url=HttpUrl(_SOURCE),
+        )
+        with pytest.raises(ValueError, match="duplicate section 'advice'"):
+            chunks_from_card(card, deck_id="book-of-thoth")

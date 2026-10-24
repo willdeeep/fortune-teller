@@ -51,8 +51,9 @@ ft-fetch-images      # download card artwork (--deck book-of-thoth|rider-waite|a
 ## Key gotchas
 
 - **Pydantic models are frozen** (`ConfigDict(frozen=True)`). Use `model.model_copy(update={...})`, never mutate.
-- **Vector store is DuckDB VSS** (HNSW, cosine, 384-dim) — not FAISS or Chroma.
+- **Vector store is DuckDB VSS** (cosine, 384-dim; an HNSW index is built but queries bypass it — see below) — not FAISS or Chroma.
 - **`search_card_section` requires `deck_id`** — the SQL filters `AND deck_id = ?`; passing the wrong deck returns nothing.
+- **Vector search is an exact scan on purpose.** Queries order by `array_cosine_similarity(...) DESC`, which bypasses the HNSW index. Do not "optimise" filtered searches to `ORDER BY array_cosine_distance(...) LIMIT k`: DuckDB's HNSW scan filters *after* its top-k and returns zero rows for one-card filters. `TestFilteredSearchUsesExactScan` guards this.
 - **ChatOpenAI timeout is 180s** (not the default 60s) — CPU-only llama.cpp can take 120s on summary prompts.
 - **Images are deck-scoped**: `settings.images_dir / deck_id / card_id.<ext>`. Always pass `images_dir / service.deck_id`, never bare `images_dir`.
 - **NiceGUI serves card images** via `app.add_static_files("/images", <deck image dir>)` in `build_app`; resolve URLs as `/images/<file>`, never filesystem paths in the browser.
@@ -64,7 +65,7 @@ ft-fetch-images      # download card artwork (--deck book-of-thoth|rider-waite|a
 - **`.env` auto-loads** via pydantic-settings; stale values leak into tests. Clean it if tests behave strangely.
 - **`Suit.PENTACLES`** is for Rider-Waite; Thoth uses `Suit.DISKS`. Both are valid enum values; minor-arcana cards must carry the suit matching their deck.
 - **`meta.json`** in each deck directory (`data/parsed/<deck_id>/meta.json`) carries `name`, `source_url`, `attribution`, `description`. `load_deck` reads it; `list_decks()` uses it for display names. Card JSON files are loaded alongside it (excluded by glob).
-- **Normalization provenance** is stored in sidecar files (`data/parsed/rider-waite/_norm/<id>.json`), not in the `Card` domain model. A `_normalization_report.md` is also generated in the deck directory.
+- **Normalization provenance** is stored in sidecar files (`data/parsed/<deck_id>/.norm/<id>.json` — note the leading dot; written by both `ft-normalize-rw` and `ft-normalize-thoth`), not in the `Card` domain model. A `_normalization_report.md` (RW) or `_synergy_report.md` (Thoth) is also generated in the deck directory.
 - **`Card.image_url`** is `str | None` — populated by the parser from HTML, carried through normalization. Not all cards have images.
 - Config singleton: `from fortune_teller.application.config import settings`
 
