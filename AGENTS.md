@@ -61,7 +61,7 @@ ft-fetch-images      # download card artwork (--deck book-of-thoth|rider-waite|a
 - **Lazy imports** in `services/reading.py` and `ui/nicegui_app.py` are intentional (`# noqa: PLC0415`) — they defer config and heavy service loads so test patches work correctly.
 - **`langchain-anthropic` is a dev/optional dependency** — imported lazily inside functions in `developer/normalize/`, not at module level. The app runs without it; only `ft-normalize-rw` needs it.
 - **`Runnable[Any, Any]` not bare `Runnable`** — `langchain_core.runnables.Runnable` is generic; bare `Runnable` triggers mypy `type-arg` error.
-- **`data/` is gitignored** except `data/models/` (has `!data/models/` exception for the offline embedding model).
+- **`data/` is gitignored** except `data/parsed/spreads/celtic-cross.json` (an authored spread). The offline embedding model in `data/models/` is ignored too; `ft-fetch-models` installs it locally.
 - **`.env` auto-loads** via pydantic-settings; stale values leak into tests. Clean it if tests behave strangely.
 - **`Suit.PENTACLES`** is for Rider-Waite; Thoth uses `Suit.DISKS`. Both are valid enum values; minor-arcana cards must carry the suit matching their deck.
 - **`meta.json`** in each deck directory (`data/parsed/<deck_id>/meta.json`) carries `name`, `source_url`, `attribution`, `description`. `load_deck` reads it; `list_decks()` uses it for display names. Card JSON files are loaded alongside it (excluded by glob).

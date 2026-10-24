@@ -373,26 +373,26 @@ class TestSynthesizeDeckSynergies:
                 "opposing_ids": ["the-tower"],
             }
         )
-        results = synthesize_deck_synergies(
+        outcome = synthesize_deck_synergies(
             tmp_path / "parsed",
             llm=stub_llm,
             only={"the-fool"},
         )
-        assert len(results) == 1
-        card, _ = results[0]
+        assert len(outcome.results) == 1
+        card, _ = outcome.results[0]
         assert card.id == "the-fool"
         assert card.reinforcing_ids == ["the-magician"]
         assert card.opposing_ids == ["the-tower"]
 
     def test_no_llm_keeps_existing_ids(self, tmp_path: Path) -> None:
         self._populate_deck_dir(tmp_path / "parsed")
-        results = synthesize_deck_synergies(
+        outcome = synthesize_deck_synergies(
             tmp_path / "parsed",
             llm=None,
             only={"the-fool"},
         )
-        assert len(results) == 1
-        card, _ = results[0]
+        assert len(outcome.results) == 1
+        card, _ = outcome.results[0]
         assert card.id == "the-fool"
         assert card.reinforcing_ids == []
         assert card.opposing_ids == []
@@ -446,23 +446,23 @@ class TestSynthesizeDeckSynergies:
                 "opposing_ids": [],
             }
         )
-        results = synthesize_deck_synergies(
+        outcome = synthesize_deck_synergies(
             tmp_path / "parsed",
             llm=stub_llm,
             only={"the-fool"},
         )
-        _, prov = results[0]
+        _, prov = outcome.results[0]
         assert prov.sections["reinforcing_ids"] == Provenance.SYNTHESIZED
         assert prov.sections["opposing_ids"] == Provenance.DETERMINISTIC
 
     def test_llm_none_provenance_is_deterministic(self, tmp_path: Path) -> None:
         self._populate_deck_dir(tmp_path / "parsed")
-        results = synthesize_deck_synergies(
+        outcome = synthesize_deck_synergies(
             tmp_path / "parsed",
             llm=None,
             only={"the-fool"},
         )
-        _, prov = results[0]
+        _, prov = outcome.results[0]
         assert prov.sections["reinforcing_ids"] == Provenance.DETERMINISTIC
         assert prov.sections["opposing_ids"] == Provenance.DETERMINISTIC
 
@@ -474,13 +474,13 @@ class TestSynthesizeDeckSynergies:
                 "opposing_ids": ["the-tower"],
             }
         )
-        results = synthesize_deck_synergies(
+        outcome = synthesize_deck_synergies(
             tmp_path / "parsed",
             llm=stub_llm,
             only={"the-fool"},
         )
-        assert len(results) == 1
-        card, prov = results[0]
+        assert len(outcome.results) == 1
+        card, prov = outcome.results[0]
         assert isinstance(card, Card)
         assert isinstance(prov, CardProvenance)
 
@@ -489,10 +489,11 @@ class TestSynthesizeDeckSynergies:
         llm = _stub_llm_failing_for(
             "The Tower", {"reinforcing_ids": ["the-fool"], "opposing_ids": []}
         )
-        results = synthesize_deck_synergies(tmp_path / "parsed", llm=llm)
-        ids = {card.id for card, _ in results}
+        outcome = synthesize_deck_synergies(tmp_path / "parsed", llm=llm)
+        ids = {card.id for card, _ in outcome.results}
         assert "the-tower" not in ids
-        assert len(results) == 3
+        assert len(outcome.results) == 3
+        assert outcome.failed == [("the-tower", "simulated LLM timeout")]
 
     def test_failed_card_files_not_rewritten(self, tmp_path: Path) -> None:
         self._populate_deck_dir(tmp_path / "parsed")
