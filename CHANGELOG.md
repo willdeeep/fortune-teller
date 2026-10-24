@@ -9,6 +9,14 @@ so a release is created by tagging — there is no version field to bump.
 
 ## [Unreleased]
 
+### Changed
+
+- **Embedding model no longer offered for commit** — `data/models/` is now
+  gitignored like the rest of `data/`. The model is installed locally by
+  `ft-fetch-models`; it was never committable (its 127 MB weight files exceed
+  the 500 KB pre-commit limit and GitHub's 100 MB file limit). `.gitignore`
+  comment and `AGENTS.md` corrected to match.
+
 ## [0.7.2] — 2026-10-24
 
 ### Fixed
