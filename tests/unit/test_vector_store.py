@@ -7,6 +7,7 @@ must not touch the network.
 
 from __future__ import annotations
 
+import json
 import uuid
 from typing import ClassVar
 
@@ -14,7 +15,10 @@ import pytest
 from pydantic import HttpUrl
 
 from fortune_teller.application.models.domain import (
+    Arcana,
+    Card,
     CardSection,
+    CardSectionText,
     Chunk,
     ChunkType,
     SearchHit,
@@ -23,6 +27,7 @@ from fortune_teller.application.stores.vector import (
     DEFAULT_EMBEDDING_DIMENSION,
     VectorStore,
 )
+from fortune_teller.developer.embed.chunker import attach_embeddings, chunks_from_card
 
 DIM = 4  # tiny dimension for readable tests
 _SOURCE = "https://example.com/the-fool/"
@@ -375,3 +380,102 @@ def test_default_embedding_dimension_is_384() -> None:
 
 # Use the imports so ruff doesn't flag them as unused (re-exported check).
 _ = HttpUrl
+
+
+# ---------------------------------------------------------------------------
+# Filtered search must not go through the HNSW index (plan 0041)
+# ---------------------------------------------------------------------------
+
+
+def _many_card_chunks(n_cards: int = 50, sections_per_card: int = 6) -> list[Chunk]:
+    """Build a corpus where any single card is a small, selective slice.
+
+    Vectors are deterministic but varied so the global nearest neighbours of a
+    query are spread across many cards — the condition under which an
+    index-first, filter-after plan drops the target card's rows.
+    """
+    sections = list(CardSection)[:sections_per_card]
+    chunks: list[Chunk] = []
+    for c in range(n_cards):
+        for s, section in enumerate(sections):
+            seed = c * sections_per_card + s + 1
+            chunks.append(
+                _make_chunk(
+                    card_id=f"card-{c}",
+                    section=section,
+                    text=f"card-{c} {section.value}",
+                    embedding=_vector(
+                        (seed * 0.37) % 1.0 + 0.01,
+                        (seed * 0.59) % 1.0 + 0.01,
+                        (seed * 0.71) % 1.0 + 0.01,
+                        (seed * 0.13) % 1.0 + 0.01,
+                    ),
+                )
+            )
+    return chunks
+
+
+@pytest.mark.unit
+class TestFilteredSearchUsesExactScan:
+    """Guard against switching filtered queries to the HNSW-eligible shape.
+
+    With the HNSW index present, ``ORDER BY array_cosine_distance(...) LIMIT k``
+    plus a selective ``WHERE`` returns the global top-k *then* filters, which can
+    yield zero rows. ``search_card_section`` must keep returning ``k`` rows.
+    """
+
+    _QUERY: ClassVar[list[float]] = [0.1, 0.2, 0.3, 0.4]
+
+    def test_card_section_search_returns_k_rows_with_index_present(self) -> None:
+        with VectorStore(":memory:", dimension=DIM) as store:
+            store.add_chunks(_many_card_chunks())  # add_chunks (re)builds the HNSW index
+            hits = store.search_card_section("book-of-thoth", "card-3", self._QUERY, k=4)
+            assert len(hits) == 4
+            assert {h.chunk.card_id for h in hits} == {"card-3"}
+
+    def test_card_section_search_does_not_plan_hnsw_scan(self) -> None:
+        with VectorStore(":memory:", dimension=DIM) as store:
+            store.add_chunks(_many_card_chunks())
+            conn = store._require_conn()
+            sql = (
+                f"EXPLAIN {store._search_sql()} "
+                "WHERE chunk_type = 'card_section' AND deck_id = ? AND card_id = ? "
+                "ORDER BY score DESC LIMIT ?"
+            )
+            plan = "".join(
+                row[1]
+                for row in conn.execute(
+                    sql, [json.dumps(self._QUERY), "book-of-thoth", "card-3", 4]
+                ).fetchall()
+            )
+            assert "HNSW" not in plan
+
+
+# ---------------------------------------------------------------------------
+# Re-embed idempotence (plan 0041)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestReembedIdempotence:
+    def test_appending_rechunked_card_does_not_duplicate(self) -> None:
+        card = Card(
+            id="the-fool",
+            name="The Fool",
+            arcana=Arcana.MAJOR,
+            sections=[
+                CardSectionText(section=CardSection.OVERALL, text="Beginnings."),
+                CardSectionText(section=CardSection.DRIVE, text="Spontaneity."),
+            ],
+            source_url=HttpUrl(_SOURCE),
+        )
+
+        def embedded_run() -> list[Chunk]:
+            # Simulates one ft-embed run: fresh chunking, then vectors attached.
+            chunks = chunks_from_card(card, deck_id="book-of-thoth")
+            return attach_embeddings(chunks, [_vector(1.0)] * len(chunks))
+
+        with VectorStore(":memory:", dimension=DIM) as store:
+            store.add_chunks(embedded_run())
+            store.add_chunks(embedded_run())  # == ft-build-index --no-rebuild after re-embed
+            assert store.count() == 2

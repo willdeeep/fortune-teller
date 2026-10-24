@@ -28,7 +28,7 @@ data/embedded/<slug>.json               ← Chunks with embedding vectors
       ▼
 data/duckdb/fortune.duckdb
   └── chunks (id, type, card_id, section, text, embedding FLOAT[384])
-       └── HNSW index
+       └── HNSW index (built; queries use an exact scan — see Key Design Decisions)
 ```
 
 ## Runtime Data Flow (New Reading)
@@ -69,7 +69,7 @@ Gradio summary panel updated
 
 | Decision | Rationale |
 | -------- | --------- |
-| DuckDB VSS | Lightweight, single-file, no server. HNSW cosine search handles ~860 vectors trivially. |
+| DuckDB VSS | Lightweight, single-file, no server. Searches are an exact cosine scan filtered to one card (~10 rows of ~1,600) — deliberately *not* via the HNSW index, which applies `WHERE` after its top-k and can return zero rows on selective filters (plan 0041). |
 | sentence-transformers locally | No embedding server needed. BAAI/bge-small-en-v1.5 is 384-dim, fast on MPS, strong quality. |
 | temperature=0 | Readings are grounded in retrieved text. The LLM surfaces patterns, not creative interpretations. |
 | No-replace at DeckSession level | Invariant enforced in domain logic, not UI — survives future UI changes. |

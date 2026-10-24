@@ -141,8 +141,13 @@ class Embedder:
     def embed_query(self, text: str) -> list[float]:
         """Embed a single query *text*.
 
-        Some embedding models use a different prefix/prompt for queries vs
-        documents; the underlying ``HuggingFaceEmbeddings`` already handles
-        that distinction, so callers should not pre-process the text.
+        Note:
+            No query-side instruction is applied. ``HuggingFaceEmbeddings``
+            embeds queries with the same ``encode_kwargs`` as documents unless
+            ``query_encode_kwargs`` is set, so BGE's optional "Represent this
+            sentence for searching relevant passages: " prefix is *not* added.
+            Retrieval is filtered to one card's sections, so the effect is
+            small; adding the prefix would change ranking and should be
+            evaluated separately (plan 0041 non-goal).
         """
         return self._get_backend().embed_query(text)
