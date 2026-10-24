@@ -14,6 +14,7 @@ import typer
 from rich.console import Console
 
 from fortune_teller.application.config import settings
+from fortune_teller.developer.normalize.reporting import report_outcome, retry_command
 from fortune_teller.developer.normalize.rider_waite import build_normalize_model
 from fortune_teller.developer.normalize.thoth import synthesize_deck_synergies
 
@@ -45,5 +46,9 @@ def main(
 
     only_ids = set(only.split(",")) if only else None
 
-    results = synthesize_deck_synergies(parsed_dir, llm=llm, only=only_ids)
-    console.print(f"[green]Synthesized synergies for {len(results)} Thoth cards.[/green]")
+    outcome = synthesize_deck_synergies(parsed_dir, llm=llm, only=only_ids)
+    retry = retry_command(
+        "uv run ft-normalize-thoth", provider=provider, model=model, no_llm=no_llm
+    )
+    if report_outcome(console, outcome, action="Synthesized synergies for", retry=retry):
+        raise typer.Exit(1)

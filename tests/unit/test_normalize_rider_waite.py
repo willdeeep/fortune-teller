@@ -19,6 +19,7 @@ from fortune_teller.application.models.domain import (
 )
 from fortune_teller.developer.normalize.rider_waite import (
     CardProvenance,
+    NormalizeOutcome,
     Provenance,
     _parse_json_object,
     _rebucket,
@@ -544,8 +545,9 @@ class TestNormalizeDeck:
         raw_path = raw_dir / f"{raw.id}.json"
         raw_path.write_text(raw.model_dump_json(), encoding="utf-8")
 
-        results = normalize_deck(raw_dir, out_dir, llm=None)
-        assert len(results) == 1
+        outcome = normalize_deck(raw_dir, out_dir, llm=None)
+        assert len(outcome.results) == 1
+        assert outcome.failed == []
 
         # Check output files
         card_path = out_dir / f"{raw.id}.json"
@@ -571,9 +573,9 @@ class TestNormalizeDeck:
         raw_dir.joinpath("the-fool.json").write_text(raw1.model_dump_json(), encoding="utf-8")
         raw_dir.joinpath("the-magician.json").write_text(raw2.model_dump_json(), encoding="utf-8")
 
-        results = normalize_deck(raw_dir, out_dir, llm=None, only={"the-fool"})
-        assert len(results) == 1
-        assert results[0][0].id == "the-fool"
+        outcome = normalize_deck(raw_dir, out_dir, llm=None, only={"the-fool"})
+        assert len(outcome.results) == 1
+        assert outcome.results[0][0].id == "the-fool"
 
     def test_normalize_deck_parses_raw_card_correctly(self, tmp_path: Path) -> None:
         raw_dir = tmp_path / "raw"
@@ -584,8 +586,8 @@ class TestNormalizeDeck:
         raw_path = raw_dir / f"{raw.id}.json"
         raw_path.write_text(raw.model_dump_json(), encoding="utf-8")
 
-        results = normalize_deck(raw_dir, out_dir, llm=None)
-        card, prov = results[0]
+        outcome = normalize_deck(raw_dir, out_dir, llm=None)
+        card, prov = outcome.results[0]
         assert isinstance(card, Card)
         assert isinstance(prov, CardProvenance)
 
@@ -603,6 +605,29 @@ class TestNormalizeDeck:
         prov_data = json.loads(prov_path.read_text(encoding="utf-8"))
         assert prov_data["card_id"] == raw.id
         assert "sections" in prov_data
+
+
+@pytest.mark.unit
+class TestNormalizeDeckFailures:
+    """A card whose LLM stage raises is reported in ``outcome.failed``."""
+
+    class _RaisingLLM:
+        def invoke(self, messages: object) -> AIMessage:  # noqa: ARG002
+            raise RuntimeError("simulated LLM timeout")
+
+    def test_failed_cards_reported_and_skipped(self, tmp_path: Path) -> None:
+        raw_dir = tmp_path / "raw"
+        out_dir = tmp_path / "parsed"
+        raw_dir.mkdir(parents=True)
+        raw = _make_raw_card(card_id="the-fool", name="The Fool")
+        raw_dir.joinpath("the-fool.json").write_text(raw.model_dump_json(), encoding="utf-8")
+
+        outcome = normalize_deck(raw_dir, out_dir, llm=self._RaisingLLM())
+
+        assert isinstance(outcome, NormalizeOutcome)
+        assert outcome.results == []
+        assert outcome.failed == [("the-fool", "simulated LLM timeout")]
+        assert not (out_dir / "the-fool.json").exists()
 
 
 # ---------------------------------------------------------------------------

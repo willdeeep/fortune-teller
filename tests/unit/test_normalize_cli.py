@@ -12,6 +12,7 @@ import pytest
 from typer.testing import CliRunner
 
 from fortune_teller.developer.normalize.cli import app
+from fortune_teller.developer.normalize.rider_waite import NormalizeOutcome
 
 
 @pytest.mark.unit
@@ -32,7 +33,7 @@ class TestNormalizeRwCli:
             tmp_path,
         )
 
-        normalize_mock = MagicMock(return_value=[])
+        normalize_mock = MagicMock(return_value=NormalizeOutcome())
         monkeypatch.setattr(
             "fortune_teller.developer.normalize.cli.normalize_deck",
             normalize_mock,
@@ -72,7 +73,7 @@ class TestNormalizeRwCli:
             "fortune_teller.developer.normalize.cli.build_normalize_model",
             build_mock,
         )
-        normalize_mock = MagicMock(return_value=[])
+        normalize_mock = MagicMock(return_value=NormalizeOutcome())
         monkeypatch.setattr(
             "fortune_teller.developer.normalize.cli.normalize_deck",
             normalize_mock,
@@ -107,7 +108,7 @@ class TestNormalizeRwCli:
             "fortune_teller.developer.normalize.cli.build_normalize_model",
             build_mock,
         )
-        normalize_mock = MagicMock(return_value=[])
+        normalize_mock = MagicMock(return_value=NormalizeOutcome())
         monkeypatch.setattr(
             "fortune_teller.developer.normalize.cli.normalize_deck",
             normalize_mock,
@@ -140,3 +141,46 @@ class TestNormalizeRwCli:
         result = runner.invoke(app, [])
 
         assert result.exit_code == 1
+
+
+@pytest.mark.unit
+class TestFailureReporting:
+    """Partial failures: every card is attempted, then the CLI exits 1 (plan: exit codes)."""
+
+    def _invoke(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        outcome: NormalizeOutcome,
+        args: list[str],
+    ):
+        (tmp_path / "raw/rider-waite").mkdir(parents=True)
+        monkeypatch.setattr("fortune_teller.developer.normalize.cli.settings.ft_data_dir", tmp_path)
+        monkeypatch.setattr(
+            "fortune_teller.developer.normalize.cli.normalize_deck", MagicMock(return_value=outcome)
+        )
+        monkeypatch.setattr(
+            "fortune_teller.developer.normalize.cli.build_normalize_model",
+            MagicMock(return_value="fake-llm"),
+        )
+        return CliRunner().invoke(app, args)
+
+    def test_failures_exit_1_with_retry_command(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        outcome = NormalizeOutcome(failed=[("the-tower", "boom"), ("death", "[Errno 61] refused")])
+        result = self._invoke(tmp_path, monkeypatch, outcome, ["--provider", "local"])
+
+        assert result.exit_code == 1
+        assert "0 cards; 2 failed" in result.output
+        assert "[Errno 61] refused" in result.output  # rich markup escaped, not swallowed
+        assert (
+            "uv run ft-normalize-rw --provider local --model claude-sonnet-4-6"
+            " --only the-tower,death" in result.output
+        )
+
+    def test_no_failures_exit_0(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        result = self._invoke(tmp_path, monkeypatch, NormalizeOutcome(), [])
+
+        assert result.exit_code == 0
+        assert "failed" not in result.output
