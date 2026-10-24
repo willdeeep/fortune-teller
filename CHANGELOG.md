@@ -9,6 +9,8 @@ so a release is created by tagging — there is no version field to bump.
 
 ## [Unreleased]
 
+## [0.7.2] — 2026-10-24
+
 ### Fixed
 
 - **Idempotent chunk IDs** (plan 0041) — chunk IDs are now deterministic
