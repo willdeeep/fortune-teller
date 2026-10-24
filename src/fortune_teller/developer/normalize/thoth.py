@@ -159,12 +159,12 @@ def synthesize_deck_synergies(
         if llm is not None:
             try:
                 reinforcing_ids, opposing_ids = synthesize_card_synergies(card, deck, llm)
-            except Exception as exc:
+            except Exception as exc:  # batch tool must be resilient: skip one bad card
                 logger.warning("Failed to synthesize synergies for %s: %s", card.id, exc)
                 failed.append((card.id, str(exc)))
-                # Keep the card as-is (empty synergy IDs)
-                reinforcing_ids = card.reinforcing_ids
-                opposing_ids = card.opposing_ids
+                # Leave the card's existing JSON + sidecar untouched and keep it
+                # out of the results, so a failure never looks like "no synergies".
+                continue
         else:
             # No LLM — keep existing IDs (empty for Thoth)
             reinforcing_ids = card.reinforcing_ids
@@ -205,7 +205,7 @@ def synthesize_deck_synergies(
         )
 
     # Write synergy report
-    report = _generate_synergy_report(results, deck_id=deck_id)
+    report = _generate_synergy_report(results, deck_id=deck_id, failed=failed)
     report_path = parsed_dir / deck_id / "_synergy_report.md"
     report_path.write_text(report, encoding="utf-8")
 
@@ -216,13 +216,16 @@ def _generate_synergy_report(
     results: list[tuple[Card, CardProvenance]],
     *,
     deck_id: str = "book-of-thoth",
+    failed: list[tuple[str, str]] | None = None,
 ) -> str:
     """Generate a markdown synergy synthesis report.
 
     Args:
         results: List of ``(Card, CardProvenance)`` tuples from
-            :func:`synthesize_deck_synergies`.
+            :func:`synthesize_deck_synergies` (successful cards only).
         deck_id: Deck identifier for the report header.
+        failed: Optional ``(card_id, error)`` pairs for cards whose synthesis
+            failed; rendered with a ready-to-run ``--only`` retry command.
 
     Returns:
         A markdown string.
@@ -252,6 +255,27 @@ def _generate_synergy_report(
         rein_label = f"{rein_count} 🤖" if rein_prov == Provenance.SYNTHESIZED else f"{rein_count}"
         opp_label = f"{opp_count} 🤖" if opp_prov == Provenance.SYNTHESIZED else f"{opp_count}"
         lines.append(f"| {card.name} | {rein_label} | {opp_label} |")
+
+    if failed:
+        retry_ids = ",".join(card_id for card_id, _ in failed)
+        lines.extend(
+            [
+                "",
+                "## Failed cards",
+                "",
+                "Synthesis failed for these cards; their files were left unchanged.",
+                "",
+                "| Card | Error |",
+                "|------|-------|",
+                *(f"| {card_id} | {error} |" for card_id, error in failed),
+                "",
+                "Retry just these:",
+                "",
+                "```bash",
+                f"uv run ft-normalize-thoth --only {retry_ids}",
+                "```",
+            ]
+        )
 
     lines.extend(
         [

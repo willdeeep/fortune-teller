@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 import pytest
 from langchain_core.messages import AIMessage
@@ -62,6 +63,17 @@ def _make_deck(
 def _stub_synergy_llm(response: dict[str, list[str]]) -> RunnableLambda:
     """Return a stub LLM that produces the given synergy JSON response."""
     return RunnableLambda(lambda _: AIMessage(content=json.dumps(response)))
+
+
+def _stub_llm_failing_for(card_name: str, ok_response: dict[str, list[str]]) -> RunnableLambda:
+    """Stub LLM that raises for *card_name* and returns *ok_response* otherwise."""
+
+    def _respond(messages: list[Any]) -> AIMessage:
+        if f"Card: {card_name} (" in messages[-1].content:
+            raise RuntimeError("simulated LLM timeout")
+        return AIMessage(content=json.dumps(ok_response))
+
+    return RunnableLambda(_respond)
 
 
 def _write_card_json(deck_dir: Path, card: Card) -> None:
@@ -470,3 +482,47 @@ class TestSynthesizeDeckSynergies:
         card, prov = results[0]
         assert isinstance(card, Card)
         assert isinstance(prov, CardProvenance)
+
+    def test_failed_card_excluded_from_results(self, tmp_path: Path) -> None:
+        self._populate_deck_dir(tmp_path / "parsed")
+        llm = _stub_llm_failing_for(
+            "The Tower", {"reinforcing_ids": ["the-fool"], "opposing_ids": []}
+        )
+        results = synthesize_deck_synergies(tmp_path / "parsed", llm=llm)
+        ids = {card.id for card, _ in results}
+        assert "the-tower" not in ids
+        assert len(results) == 3
+
+    def test_failed_card_files_not_rewritten(self, tmp_path: Path) -> None:
+        self._populate_deck_dir(tmp_path / "parsed")
+        deck_dir = tmp_path / "parsed" / "book-of-thoth"
+        card_path = deck_dir / "the-tower.json"
+        before = card_path.read_text(encoding="utf-8")
+        llm = _stub_llm_failing_for(
+            "The Tower", {"reinforcing_ids": ["the-fool"], "opposing_ids": []}
+        )
+        synthesize_deck_synergies(tmp_path / "parsed", llm=llm)
+        assert card_path.read_text(encoding="utf-8") == before
+        assert not (deck_dir / ".norm" / "the-tower.json").exists()
+
+    def test_report_lists_failed_cards_with_retry_command(self, tmp_path: Path) -> None:
+        self._populate_deck_dir(tmp_path / "parsed")
+        llm = _stub_llm_failing_for(
+            "The Tower", {"reinforcing_ids": ["the-fool"], "opposing_ids": []}
+        )
+        synthesize_deck_synergies(tmp_path / "parsed", llm=llm)
+        report = (tmp_path / "parsed" / "book-of-thoth" / "_synergy_report.md").read_text(
+            encoding="utf-8"
+        )
+        assert "## Failed cards" in report
+        assert "| the-tower | simulated LLM timeout |" in report
+        assert "uv run ft-normalize-thoth --only the-tower" in report
+
+    def test_report_has_no_failed_section_when_all_succeed(self, tmp_path: Path) -> None:
+        self._populate_deck_dir(tmp_path / "parsed")
+        llm = _stub_synergy_llm({"reinforcing_ids": ["the-fool"], "opposing_ids": []})
+        synthesize_deck_synergies(tmp_path / "parsed", llm=llm)
+        report = (tmp_path / "parsed" / "book-of-thoth" / "_synergy_report.md").read_text(
+            encoding="utf-8"
+        )
+        assert "## Failed cards" not in report
