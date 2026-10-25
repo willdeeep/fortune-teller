@@ -9,6 +9,27 @@ so a release is created by tagging — there is no version field to bump.
 
 ## [Unreleased]
 
+## [0.7.3] — 2026-10-24
+
+### Changed
+
+- **Embedding model no longer offered for commit** — `data/models/` is now
+  gitignored like the rest of `data/`. The model is installed locally by
+  `ft-fetch-models`; it was never committable (its 127 MB weight files exceed
+  the 500 KB pre-commit limit and GitHub's 100 MB file limit). `.gitignore`
+  comment and `AGENTS.md` corrected to match.
+
+### Fixed
+
+- **Normalisers report partial failures and exit 1** — `ft-normalize-rw`,
+  `ft-normalize-thoth` and `ft-normalize` still process every card, but now end
+  with a summary (`Normalized N cards; M failed:`), each failed card's error, and
+  a one-line retry command that repeats the run's `--provider`/`--model` (or
+  `--no-llm`) with `--only <failed ids>` — then exit 1. Previously they printed
+  a green success count and exited 0 even when cards failed. `ft-normalize`
+  runs both decks before exiting 1 if either had failures. The deck functions
+  now return a `NormalizeOutcome(results, failed)`.
+
 ## [0.7.2] — 2026-10-24
 
 ### Fixed
@@ -255,7 +276,13 @@ so a release is created by tagging — there is no version field to bump.
   auto-deal with no-replace, RAG per-card interpretations + a cross-card summary,
   local llama.cpp chat model, DuckDB (VSS) vector store, and a Gradio UI.
 
-[Unreleased]: https://github.com/willdeeep/fortune-teller/compare/v0.5.2...HEAD
+[Unreleased]: https://github.com/willdeeep/fortune-teller/compare/v0.7.3...HEAD
+[0.7.3]: https://github.com/willdeeep/fortune-teller/compare/v0.7.2...v0.7.3
+[0.7.2]: https://github.com/willdeeep/fortune-teller/compare/v0.7.1...v0.7.2
+[0.7.1]: https://github.com/willdeeep/fortune-teller/compare/v0.7.0...v0.7.1
+[0.7.0]: https://github.com/willdeeep/fortune-teller/compare/v0.6.1...v0.7.0
+[0.6.1]: https://github.com/willdeeep/fortune-teller/compare/v0.6.0...v0.6.1
+[0.6.0]: https://github.com/willdeeep/fortune-teller/compare/v0.5.2...v0.6.0
 [0.5.2]: https://github.com/willdeeep/fortune-teller/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/willdeeep/fortune-teller/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/willdeeep/fortune-teller/compare/v0.4.0...v0.5.0

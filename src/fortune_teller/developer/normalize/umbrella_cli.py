@@ -17,6 +17,7 @@ import typer
 from rich.console import Console
 
 from fortune_teller.application.config import settings
+from fortune_teller.developer.normalize.reporting import report_outcome, retry_command
 from fortune_teller.developer.normalize.rider_waite import build_normalize_model, normalize_deck
 from fortune_teller.developer.normalize.thoth import synthesize_deck_synergies
 
@@ -39,6 +40,7 @@ def main(
         llm = build_normalize_model(provider, model)
 
     only_ids = set(only.split(",")) if only else None
+    any_failed = False
 
     if deck in ("rw", "all"):
         raw_dir = settings.ft_data_dir / "raw" / "rider-waite"
@@ -53,8 +55,13 @@ def main(
             if deck == "rw":
                 raise typer.Exit(1)
         else:
-            results = normalize_deck(raw_dir, out_dir, llm=llm, only=only_ids)
-            console.print(f"[green]Normalized {len(results)} Rider-Waite cards.[/green]")
+            outcome = normalize_deck(raw_dir, out_dir, llm=llm, only=only_ids)
+            retry = retry_command(
+                "uv run ft-normalize --deck rw", provider=provider, model=model, no_llm=no_llm
+            )
+            any_failed |= report_outcome(
+                console, outcome, action="Rider-Waite: normalized", retry=retry
+            )
 
     if deck in ("thoth", "all"):
         parsed_dir = settings.ft_data_dir / "parsed"
@@ -69,5 +76,14 @@ def main(
             if deck == "thoth":
                 raise typer.Exit(1)
         else:
-            results = synthesize_deck_synergies(parsed_dir, llm=llm, only=only_ids)
-            console.print(f"[green]Synthesized synergies for {len(results)} Thoth cards.[/green]")
+            outcome = synthesize_deck_synergies(parsed_dir, llm=llm, only=only_ids)
+            retry = retry_command(
+                "uv run ft-normalize --deck thoth", provider=provider, model=model, no_llm=no_llm
+            )
+            any_failed |= report_outcome(
+                console, outcome, action="Thoth: synthesized synergies for", retry=retry
+            )
+
+    # Every requested deck has been attempted; now signal any partial failure.
+    if any_failed:
+        raise typer.Exit(1)

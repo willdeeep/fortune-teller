@@ -44,7 +44,13 @@ class TestEmbedderDefaults:
         embedder = Embedder()
         assert embedder.dimension == DEFAULT_EMBEDDING_DIMENSION == 384
 
-    def test_model_name_defaults_to_settings(self) -> None:
+    def test_model_name_defaults_to_settings(self, monkeypatch, tmp_path) -> None:
+        # Point the local snapshot path somewhere empty so a real
+        # ``data/models/`` (present after ``ft-fetch-models``) can't win.
+        monkeypatch.setattr(
+            "fortune_teller.application.stores.embeddings.settings.embedding_model_path",
+            tmp_path / "does-not-exist",
+        )
         embedder = Embedder()
         assert embedder.model_name == "BAAI/bge-small-en-v1.5"
 

@@ -13,6 +13,7 @@ import typer
 from rich.console import Console
 
 from fortune_teller.application.config import settings
+from fortune_teller.developer.normalize.reporting import report_outcome, retry_command
 from fortune_teller.developer.normalize.rider_waite import build_normalize_model, normalize_deck
 
 app = typer.Typer(add_completion=False)
@@ -44,5 +45,7 @@ def main(
 
     only_ids = set(only.split(",")) if only else None
 
-    results = normalize_deck(raw_dir, out_dir, llm=llm, only=only_ids)
-    console.print(f"[green]Normalized {len(results)} cards.[/green]")
+    outcome = normalize_deck(raw_dir, out_dir, llm=llm, only=only_ids)
+    retry = retry_command("uv run ft-normalize-rw", provider=provider, model=model, no_llm=no_llm)
+    if report_outcome(console, outcome, action="Normalized", retry=retry):
+        raise typer.Exit(1)

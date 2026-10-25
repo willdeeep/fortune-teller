@@ -21,6 +21,7 @@ from fortune_teller.application.services.loading import load_deck
 from fortune_teller.developer.normalize.prompts import SYNERGY_HUMAN, SYNERGY_SYSTEM
 from fortune_teller.developer.normalize.rider_waite import (
     CardProvenance,
+    NormalizeOutcome,
     Provenance,
     _parse_json_object,
 )
@@ -129,7 +130,7 @@ def synthesize_deck_synergies(
     llm: Runnable[Any, Any] | None = None,
     only: set[str] | None = None,
     deck_id: str = "book-of-thoth",
-) -> list[tuple[Card, CardProvenance]]:
+) -> NormalizeOutcome:
     """Synthesize reinforce/oppose IDs for all (or selected) Thoth cards.
 
     Reads existing parsed cards from ``parsed_dir / deck_id``, synthesizes
@@ -143,8 +144,10 @@ def synthesize_deck_synergies(
         deck_id: Deck identifier (default ``"book-of-thoth"``).
 
     Returns:
-        List of ``(Card, CardProvenance)`` tuples for every card successfully
-        processed; failed cards are excluded and listed in ``_synergy_report.md``.
+        A :class:`~fortune_teller.developer.normalize.rider_waite.NormalizeOutcome`:
+        the successfully processed cards, and ``(card_id, error)`` for each card
+        whose synthesis failed (left unchanged on disk and listed in
+        ``_synergy_report.md``).
     """
     deck = load_deck(parsed_dir, deck_id)
     provenance_dir = parsed_dir / deck_id / ".norm"
@@ -197,20 +200,12 @@ def synthesize_deck_synergies(
         prov_path = provenance_dir / f"{card.id}.json"
         prov_path.write_text(provenance.model_dump_json(indent=2), encoding="utf-8")
 
-    if failed:
-        ids = ",".join(cid for cid, _ in failed)
-        logger.warning(
-            "%d card(s) failed synergy synthesis; re-run with: --only %s",
-            len(failed),
-            ids,
-        )
-
     # Write synergy report
     report = _generate_synergy_report(results, deck_id=deck_id, failed=failed)
     report_path = parsed_dir / deck_id / "_synergy_report.md"
     report_path.write_text(report, encoding="utf-8")
 
-    return results
+    return NormalizeOutcome(results=results, failed=failed)
 
 
 def _table_cell(text: str) -> str:
